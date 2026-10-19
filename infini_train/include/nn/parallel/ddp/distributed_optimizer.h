@@ -17,53 +17,59 @@ class Module;
 namespace parallel {
 class ParamAndGradBuffer;
 class ParamAndGradBucketGroup;
-} // namespace parallel
-} // namespace infini_train::nn
+}  // namespace parallel
+}  // namespace infini_train::nn
 
 namespace infini_train::nn::parallel {
 
 class DistributedOptimizer final : public infini_train::Optimizer {
-public:
-    DistributedOptimizer(OptimizerCreator base_optimizer_creator,
-                         const std::vector<std::shared_ptr<Tensor>> &full_params,
-                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
-                         size_t ddp_rank);
+ public:
+  DistributedOptimizer(OptimizerCreator base_optimizer_creator,
+                       const std::vector<std::shared_ptr<Tensor>> &full_params,
+                       const std::vector<std::shared_ptr<Module>> &model_chunks,
+                       size_t ddp_world_size, size_t ddp_rank);
 
-    DistributedOptimizer(OptimizerCreatorNamed base_optimizer_creator, const NamedParameterList &named_parameters,
-                         const std::vector<std::shared_ptr<Module>> &model_chunks, size_t ddp_world_size,
-                         size_t ddp_rank);
+  DistributedOptimizer(OptimizerCreatorNamed base_optimizer_creator,
+                       const NamedParameterList &named_parameters,
+                       const std::vector<std::shared_ptr<Module>> &model_chunks,
+                       size_t ddp_world_size, size_t ddp_rank);
 
-    void Step() override;
+  void Step() override;
 
-    void ZeroGrad(bool set_to_none = true) override;
+  void ZeroGrad(bool set_to_none = true) override;
 
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
+      const override;
 
-    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
+  void LoadStateDict(
+      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+          &state_dict) override;
 
-    void StartParamSync(bool force_sync = false);
-    void FinishParamSync(bool skip_next_bucket_dispatch = false);
+  void StartParamSync(bool force_sync = false);
+  void FinishParamSync(bool skip_next_bucket_dispatch = false);
 
-    virtual void set_learning_rate(float lr) override;
-    virtual float learning_rate() const override;
+  virtual void set_learning_rate(float lr) override;
+  virtual float learning_rate() const override;
 
-private:
-    using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &, const std::shared_ptr<Tensor> &)>;
+ private:
+  using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &,
+                                           const std::shared_ptr<Tensor> &)>;
 
-    void InitializeModelChunks(const std::vector<std::shared_ptr<Module>> &model_chunks);
-    void BuildShardParamsAndBindGrads(const AddShardParam &add_shard_param);
+  void InitializeModelChunks(
+      const std::vector<std::shared_ptr<Module>> &model_chunks);
+  void BuildShardParamsAndBindGrads(const AddShardParam &add_shard_param);
 
-private:
-    // Inherit from DDP model
-    std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers_;
-    std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
+ private:
+  // Inherit from DDP model
+  std::vector<std::shared_ptr<ParamAndGradBuffer>> param_grad_buffers_;
+  std::vector<std::shared_ptr<ParamAndGradBucketGroup>> bucket_groups_;
 
-    // DP info
-    size_t ddp_world_size_;
-    size_t ddp_rank_;
+  // DP info
+  size_t ddp_world_size_;
+  size_t ddp_rank_;
 
-    // Base optimizer (SGD, Adam and etc.)
-    std::shared_ptr<Optimizer> base_optimizer_;
+  // Base optimizer (SGD, Adam and etc.)
+  std::shared_ptr<Optimizer> base_optimizer_;
 };
 
-} // namespace infini_train::nn::parallel
+}  // namespace infini_train::nn::parallel

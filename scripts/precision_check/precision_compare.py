@@ -122,7 +122,9 @@ def main():
     errors = 0
 
     for rel_path in sorted(common):
-        result = compare_tensors(files1[rel_path], files2[rel_path], args.atol, args.rtol)
+        result = compare_tensors(
+            files1[rel_path], files2[rel_path], args.atol, args.rtol
+        )
 
         if result["error"]:
             errors += 1
@@ -132,13 +134,19 @@ def main():
             passed += 1
             if args.verbose:
                 print(f"PASS: {rel_path}")
-                print(f"  max_abs={result['max_abs_diff']:.2e} max_rel={result['max_rel_diff']:.2e}")
+                print(
+                    f"  max_abs={result['max_abs_diff']:.2e} max_rel={result['max_rel_diff']:.2e}"
+                )
         else:
             failed += 1
             print(f"FAIL: {rel_path}")
             print(f"  shape={result['shape1']} dtype={result['dtype1']}")
-            print(f"  max_abs={result['max_abs_diff']:.2e} mean_abs={result['mean_abs_diff']:.2e}")
-            print(f"  max_rel={result['max_rel_diff']:.2e} mean_rel={result['mean_rel_diff']:.2e}")
+            print(
+                f"  max_abs={result['max_abs_diff']:.2e} mean_abs={result['mean_abs_diff']:.2e}"
+            )
+            print(
+                f"  max_rel={result['max_rel_diff']:.2e} mean_rel={result['mean_rel_diff']:.2e}"
+            )
 
     print()
     print("=" * 50)

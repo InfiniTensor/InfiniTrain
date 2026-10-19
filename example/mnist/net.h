@@ -7,9 +7,9 @@
 #include "infini_train/include/tensor.h"
 
 class MNIST : public infini_train::nn::Module {
-public:
-    MNIST();
+ public:
+  MNIST();
 
-    std::vector<std::shared_ptr<infini_train::Tensor>>
-    Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+  std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
+      const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 };

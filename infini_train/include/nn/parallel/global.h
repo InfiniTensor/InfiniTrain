@@ -18,160 +18,204 @@ extern thread_local int thread_global_rank;
 enum Axis : uint8_t { kDp = 0, kTp = 1, kPp = 2, kEp = 3, kAxisCount = 4 };
 
 class RankGenerator {
-public:
-    // Default order according to Megatron-LM is tp-cp-ep-dp-pp. Ref:
-    // https://github.com/NVIDIA/Megatron-LM/blob/cf2f07d7b1315c96c05554c670c43207c6783e5e/megatron/core/parallel_state.py#L561
-    explicit RankGenerator(int tensor_parallel_size, int expert_parallel_size, int data_parallel_size,
-                           int pipeline_parallel_size, std::array<Axis, kAxisCount> order = {kTp, kEp, kDp, kPp});
+ public:
+  // Default order according to Megatron-LM is tp-cp-ep-dp-pp. Ref:
+  // https://github.com/NVIDIA/Megatron-LM/blob/cf2f07d7b1315c96c05554c670c43207c6783e5e/megatron/core/parallel_state.py#L561
+  explicit RankGenerator(int tensor_parallel_size, int expert_parallel_size,
+                         int data_parallel_size, int pipeline_parallel_size,
+                         std::array<Axis, kAxisCount> order = {kTp, kEp, kDp,
+                                                               kPp});
 
-    int AxisSize(Axis axis) const;
-    int WorldSize() const;
-    const std::array<Axis, kAxisCount> &order() const;
+  int AxisSize(Axis axis) const;
+  int WorldSize() const;
+  const std::array<Axis, kAxisCount> &order() const;
 
-    // Generate all rank groups by varying the specified axes and fixing all
-    // other axes, following Megatron-LM's RankGenerator::get_ranks() ordering.
-    std::vector<std::vector<int>> GetRanks(std::initializer_list<Axis> varying_axes) const;
-    std::vector<std::vector<int>> GetRanks(Axis varying_axis) const;
+  // Generate all rank groups by varying the specified axes and fixing all
+  // other axes, following Megatron-LM's RankGenerator::get_ranks() ordering.
+  std::vector<std::vector<int>> GetRanks(
+      std::initializer_list<Axis> varying_axes) const;
+  std::vector<std::vector<int>> GetRanks(Axis varying_axis) const;
 
-    int GroupId(std::initializer_list<Axis> varying_axes, int global_rank) const;
-    int GroupId(Axis varying_axis, int global_rank) const;
-    std::vector<int> GroupRanks(std::initializer_list<Axis> varying_axes, int global_rank) const;
-    std::vector<int> GroupRanks(Axis varying_axis, int global_rank) const;
+  int GroupId(std::initializer_list<Axis> varying_axes, int global_rank) const;
+  int GroupId(Axis varying_axis, int global_rank) const;
+  std::vector<int> GroupRanks(std::initializer_list<Axis> varying_axes,
+                              int global_rank) const;
+  std::vector<int> GroupRanks(Axis varying_axis, int global_rank) const;
 
-    int RankOf(int dp, int tp, int pp, int ep) const;
-    void CoordOf(int rank, int &dp, int &tp, int &pp, int &ep) const;
+  int RankOf(int dp, int tp, int pp, int ep) const;
+  void CoordOf(int rank, int &dp, int &tp, int &pp, int &ep) const;
 
-private:
-    void InitStrides();
+ private:
+  void InitStrides();
 
-    std::array<int, kAxisCount> sizes_{1, 1, 1, 1};
-    std::array<Axis, kAxisCount> order_{kTp, kEp, kDp, kPp};
-    std::array<int, kAxisCount> strides_{1, 1, 1, 1};
+  std::array<int, kAxisCount> sizes_{1, 1, 1, 1};
+  std::array<Axis, kAxisCount> order_{kTp, kEp, kDp, kPp};
+  std::array<int, kAxisCount> strides_{1, 1, 1, 1};
 };
 
 class GlobalEnv {
-public:
-    static GlobalEnv &Instance();
+ public:
+  static GlobalEnv &Instance();
 
-    void Init(int threads_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-              int pipeline_parallel_size, int virtual_pipeline_parallel_size, int expert_parallel_size,
-              std::optional<int> expert_tensor_parallel_size);
+  void Init(int threads_per_process, int tensor_parallel_size,
+            bool sequence_parallel_enabled, int pipeline_parallel_size,
+            int virtual_pipeline_parallel_size, int expert_parallel_size,
+            std::optional<int> expert_tensor_parallel_size);
 
-    int nnodes() const;
+  int nnodes() const;
 
-    int nproc_per_node() const;
+  int nproc_per_node() const;
 
-    int world_size() const;
+  int world_size() const;
 
-    int global_proc_rank() const;
+  int global_proc_rank() const;
 
-    int local_proc_rank() const;
+  int local_proc_rank() const;
 
-    int nthread_per_process() const;
+  int nthread_per_process() const;
 
-    int tensor_parallel_size() const;
+  int tensor_parallel_size() const;
 
-    int expert_tensor_parallel_size() const;
+  int expert_tensor_parallel_size() const;
 
-    int sequence_parallel_size() const;
+  int sequence_parallel_size() const;
 
-    bool sequence_parallel_enabled() const;
+  bool sequence_parallel_enabled() const;
 
-    int data_parallel_size() const;
+  int data_parallel_size() const;
 
-    int expert_data_parallel_size() const;
+  int expert_data_parallel_size() const;
 
-    int pipeline_parallel_size() const;
+  int pipeline_parallel_size() const;
 
-    int virtual_pipeline_parallel_size() const;
+  int virtual_pipeline_parallel_size() const;
 
-    int expert_parallel_size() const;
+  int expert_parallel_size() const;
 
-    // Two logical rank views over the same physical world. The dense view uses
-    // TP/DP, while the expert view exposes the same axes as ETP/EDP.
-    const RankGenerator &dense_rank_generator() const;
-    const RankGenerator &expert_rank_generator() const;
+  // Two logical rank views over the same physical world. The dense view uses
+  // TP/DP, while the expert view exposes the same axes as ETP/EDP.
+  const RankGenerator &dense_rank_generator() const;
+  const RankGenerator &expert_rank_generator() const;
 
-private:
-    GlobalEnv() = default;
-    ~GlobalEnv() = default;
+ private:
+  GlobalEnv() = default;
+  ~GlobalEnv() = default;
 
-    GlobalEnv(const GlobalEnv &) = delete;
-    GlobalEnv &operator=(const GlobalEnv &) = delete;
+  GlobalEnv(const GlobalEnv &) = delete;
+  GlobalEnv &operator=(const GlobalEnv &) = delete;
 
-private:
-    int nnodes_ = 1;
-    int nproc_per_node_ = 1;
-    int nthread_per_process_ = 1;
-    int world_size_ = 1;
+ private:
+  int nnodes_ = 1;
+  int nproc_per_node_ = 1;
+  int nthread_per_process_ = 1;
+  int world_size_ = 1;
 
-    int global_proc_rank_ = 0;
-    int local_proc_rank_ = 0;
+  int global_proc_rank_ = 0;
+  int local_proc_rank_ = 0;
 
-    int tensor_parallel_size_ = 1;
-    int expert_tensor_parallel_size_ = 1;
-    bool sequence_parallel_enabled_ = false;
+  int tensor_parallel_size_ = 1;
+  int expert_tensor_parallel_size_ = 1;
+  bool sequence_parallel_enabled_ = false;
 
-    int data_parallel_size_ = 1;
-    int expert_data_parallel_size_ = 1;
+  int data_parallel_size_ = 1;
+  int expert_data_parallel_size_ = 1;
 
-    int pipeline_parallel_size_ = 1;
-    int virtual_pipeline_parallel_size_ = 1;
-    int expert_parallel_size_ = 1;
+  int pipeline_parallel_size_ = 1;
+  int virtual_pipeline_parallel_size_ = 1;
+  int expert_parallel_size_ = 1;
 
-    mutable std::mutex mutex_;
-    bool initialized_ = false;
+  mutable std::mutex mutex_;
+  bool initialized_ = false;
 
-    RankGenerator dense_rank_generator_{1, 1, 1, 1};
-    RankGenerator expert_rank_generator_{1, 1, 1, 1};
+  RankGenerator dense_rank_generator_{1, 1, 1, 1};
+  RankGenerator expert_rank_generator_{1, 1, 1, 1};
 };
 
-inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size, bool sequence_parallel_enabled,
-                       int pipeline_parallel_size, int virtual_pipeline_parallel, int expert_parallel_size,
+inline void InitAllEnv(int nthread_per_process, int tensor_parallel_size,
+                       bool sequence_parallel_enabled,
+                       int pipeline_parallel_size,
+                       int virtual_pipeline_parallel, int expert_parallel_size,
                        std::optional<int> expert_tensor_parallel_size) {
-    GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
-                               pipeline_parallel_size, virtual_pipeline_parallel, expert_parallel_size,
-                               expert_tensor_parallel_size);
+  GlobalEnv::Instance().Init(nthread_per_process, tensor_parallel_size,
+                             sequence_parallel_enabled, pipeline_parallel_size,
+                             virtual_pipeline_parallel, expert_parallel_size,
+                             expert_tensor_parallel_size);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
 inline int GetNprocPerNode() { return GlobalEnv::Instance().nproc_per_node(); }
-inline int GetNthreadPerProc() { return GlobalEnv::Instance().nthread_per_process(); }
-inline int GetGlobalProcRank() { return GlobalEnv::Instance().global_proc_rank(); }
-inline int GetLocalProcRank() { return GlobalEnv::Instance().local_proc_rank(); }
-inline int GetDeviceIndex(int thread_rank) { return GetLocalProcRank() * GetNthreadPerProc() + thread_rank; }
-
-inline int GetTensorParallelSize() { return GlobalEnv::Instance().tensor_parallel_size(); }
-inline int GetExpertTensorParallelSize() { return GlobalEnv::Instance().expert_tensor_parallel_size(); }
-inline int GetSequenceParallelSize() { return GlobalEnv::Instance().sequence_parallel_size(); }
-inline bool GetSequenceParallelEnabled() { return GlobalEnv::Instance().sequence_parallel_enabled(); }
-inline int GetDataParallelSize() { return GlobalEnv::Instance().data_parallel_size(); }
-inline int GetExpertDataParallelSize() { return GlobalEnv::Instance().expert_data_parallel_size(); }
-inline int GetPipelineParallelSize() { return GlobalEnv::Instance().pipeline_parallel_size(); }
-inline int GetVirtualPipelineParallelSize() { return GlobalEnv::Instance().virtual_pipeline_parallel_size(); }
-inline int GetExpertParallelSize() { return GlobalEnv::Instance().expert_parallel_size(); }
-
-inline const RankGenerator &GetDenseRankGenerator() { return GlobalEnv::Instance().dense_rank_generator(); }
-inline const RankGenerator &GetExpertRankGenerator() { return GlobalEnv::Instance().expert_rank_generator(); }
-
-// Compatibility helpers for the pre-RankGenerator dense topology API.
-inline int GetRankOf(int dp, int tp, int pp) { return GetDenseRankGenerator().RankOf(dp, tp, pp, /*ep=*/0); }
-
-inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
-    int ep = 0;
-    GetDenseRankGenerator().CoordOf(rank, dp, tp, pp, ep);
+inline int GetNthreadPerProc() {
+  return GlobalEnv::Instance().nthread_per_process();
+}
+inline int GetGlobalProcRank() {
+  return GlobalEnv::Instance().global_proc_rank();
+}
+inline int GetLocalProcRank() {
+  return GlobalEnv::Instance().local_proc_rank();
+}
+inline int GetDeviceIndex(int thread_rank) {
+  return GetLocalProcRank() * GetNthreadPerProc() + thread_rank;
 }
 
-inline int GetGroupId(Axis target, int rank) { return GetDenseRankGenerator().GroupId(target, rank); }
+inline int GetTensorParallelSize() {
+  return GlobalEnv::Instance().tensor_parallel_size();
+}
+inline int GetExpertTensorParallelSize() {
+  return GlobalEnv::Instance().expert_tensor_parallel_size();
+}
+inline int GetSequenceParallelSize() {
+  return GlobalEnv::Instance().sequence_parallel_size();
+}
+inline bool GetSequenceParallelEnabled() {
+  return GlobalEnv::Instance().sequence_parallel_enabled();
+}
+inline int GetDataParallelSize() {
+  return GlobalEnv::Instance().data_parallel_size();
+}
+inline int GetExpertDataParallelSize() {
+  return GlobalEnv::Instance().expert_data_parallel_size();
+}
+inline int GetPipelineParallelSize() {
+  return GlobalEnv::Instance().pipeline_parallel_size();
+}
+inline int GetVirtualPipelineParallelSize() {
+  return GlobalEnv::Instance().virtual_pipeline_parallel_size();
+}
+inline int GetExpertParallelSize() {
+  return GlobalEnv::Instance().expert_parallel_size();
+}
 
-inline int GetGroupId(Axis target, int dp, int tp, int pp) { return GetGroupId(target, GetRankOf(dp, tp, pp)); }
+inline const RankGenerator &GetDenseRankGenerator() {
+  return GlobalEnv::Instance().dense_rank_generator();
+}
+inline const RankGenerator &GetExpertRankGenerator() {
+  return GlobalEnv::Instance().expert_rank_generator();
+}
+
+// Compatibility helpers for the pre-RankGenerator dense topology API.
+inline int GetRankOf(int dp, int tp, int pp) {
+  return GetDenseRankGenerator().RankOf(dp, tp, pp, /*ep=*/0);
+}
+
+inline void GetCoordOf(int rank, int &dp, int &tp, int &pp) {
+  int ep = 0;
+  GetDenseRankGenerator().CoordOf(rank, dp, tp, pp, ep);
+}
+
+inline int GetGroupId(Axis target, int rank) {
+  return GetDenseRankGenerator().GroupId(target, rank);
+}
+
+inline int GetGroupId(Axis target, int dp, int tp, int pp) {
+  return GetGroupId(target, GetRankOf(dp, tp, pp));
+}
 
 inline std::vector<int> GetGroupRanks(Axis target, int rank) {
-    return GetDenseRankGenerator().GroupRanks(target, rank);
+  return GetDenseRankGenerator().GroupRanks(target, rank);
 }
 
 inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
-    return GetGroupRanks(target, GetRankOf(dp, tp, pp));
+  return GetGroupRanks(target, GetRankOf(dp, tp, pp));
 }
 
 /**
@@ -201,11 +245,13 @@ inline std::vector<int> GetGroupRanks(Axis target, int dp, int tp, int pp) {
  *
  * @return A formatted overview suitable for logging and topology validation.
  */
-std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator = GetDenseRankGenerator(),
-                                 bool skip_trivial_axes = true);
+std::string ProcessGroupOverview(
+    const RankGenerator &dense_rank_generator = GetDenseRankGenerator(),
+    bool skip_trivial_axes = true);
 
 /**
- * @brief Generates a human-readable overview of dense and expert parallel groups.
+ * @brief Generates a human-readable overview of dense and expert parallel
+ * groups.
  *
  * Both rank generators describe logical views over the same physical ranks.
  * In the expert view, the TP and DP axes represent ETP and EDP. This overload
@@ -230,8 +276,8 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator = Get
  *   - TP 1: [2, 3]
  * [PP] size=1, unenabled
  *
- * [Expert Rank View] shape={ETP=1, EP=2, EDP=2, PP=1}, order={ ETP -> EP -> EDP -> PP }
- * [EDP] size=2, num_groups=2
+ * [Expert Rank View] shape={ETP=1, EP=2, EDP=2, PP=1}, order={ ETP -> EP -> EDP
+ * -> PP } [EDP] size=2, num_groups=2
  *   - EDP 0: [0, 2]
  *   - EDP 1: [1, 3]
  * [ETP] size=1, unenabled
@@ -245,7 +291,8 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator = Get
  *
  * @return A formatted overview suitable for logging and topology validation.
  */
-std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator, const RankGenerator &expert_rank_generator,
+std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator,
+                                 const RankGenerator &expert_rank_generator,
                                  bool skip_trivial_axes = true);
 
-} // namespace infini_train::nn::parallel::global
+}  // namespace infini_train::nn::parallel::global

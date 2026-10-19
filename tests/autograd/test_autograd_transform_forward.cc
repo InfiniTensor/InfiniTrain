@@ -14,72 +14,83 @@
 
 using namespace infini_train;
 
-class AutogradTransformForwardTest : public infini_train::test::InfiniTrainTest {};
+class AutogradTransformForwardTest
+    : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(AutogradTransformForwardTest, TransposeForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto transpose_fn = std::make_shared<autograd::Transpose>(0, 1);
-    auto result = transpose_fn->Apply({a});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto transpose_fn = std::make_shared<autograd::Transpose>(0, 1);
+  auto result = transpose_fn->Apply({a});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
 }
 
 TEST_P(AutogradTransformForwardTest, SliceForward) {
-    std::vector<float> values(16);
-    std::iota(values.begin(), values.end(), 0.0f);
-    auto a = std::make_shared<Tensor>(values.data(), std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice());
-    auto slice_fn = std::make_shared<autograd::Slice>(std::vector<int64_t>{1, 1}, std::vector<int64_t>{3, 3},
-                                                      std::vector<int64_t>{1, 1});
-    auto result = slice_fn->Apply({a});
-    EXPECT_EQ(result.size(), 1);
-    test::ExpectTensorFloatEqual(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
+  std::vector<float> values(16);
+  std::iota(values.begin(), values.end(), 0.0f);
+  auto a = std::make_shared<Tensor>(values.data(), std::vector<int64_t>{4, 4},
+                                    DataType::kFLOAT32, GetDevice());
+  auto slice_fn = std::make_shared<autograd::Slice>(std::vector<int64_t>{1, 1},
+                                                    std::vector<int64_t>{3, 3},
+                                                    std::vector<int64_t>{1, 1});
+  auto result = slice_fn->Apply({a});
+  EXPECT_EQ(result.size(), 1);
+  test::ExpectTensorFloatEqual(result[0], {5.0f, 6.0f, 9.0f, 10.0f});
 }
 
 TEST_P(AutogradTransformForwardTest, SplitForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto split_fn = std::make_shared<autograd::Split>(2, 0);
-    auto result = split_fn->Apply({a});
-    EXPECT_EQ(result.size(), 2);
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{4, 4},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto split_fn = std::make_shared<autograd::Split>(2, 0);
+  auto result = split_fn->Apply({a});
+  EXPECT_EQ(result.size(), 2);
 }
 
 TEST_P(AutogradTransformForwardTest, ConcatForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(2.0f);
-    auto concat_fn = std::make_shared<autograd::Concat>(0);
-    auto result = concat_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{4, 2}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 2},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 2},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(2.0f);
+  auto concat_fn = std::make_shared<autograd::Concat>(0);
+  auto result = concat_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{4, 2}));
 }
 
 TEST_P(AutogradTransformForwardTest, StackForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(2.0f);
-    auto stack_fn = std::make_shared<autograd::Stack>(0);
-    auto result = stack_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 2, 3}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(2.0f);
+  auto stack_fn = std::make_shared<autograd::Stack>(0);
+  auto result = stack_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 2, 3}));
 }
 
 TEST_P(AutogradTransformForwardTest, TrilForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto tril_fn = std::make_shared<autograd::Tril>(0);
-    auto result = tril_fn->Apply({a});
-    EXPECT_EQ(result.size(), 1);
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto tril_fn = std::make_shared<autograd::Tril>(0);
+  auto result = tril_fn->Apply({a});
+  EXPECT_EQ(result.size(), 1);
 }
 
 TEST_P(AutogradTransformForwardTest, TriuForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto triu_fn = std::make_shared<autograd::Triu>(0);
-    auto result = triu_fn->Apply({a});
-    EXPECT_EQ(result.size(), 1);
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto triu_fn = std::make_shared<autograd::Triu>(0);
+  auto result = triu_fn->Apply({a});
+  EXPECT_EQ(result.size(), 1);
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradTransformForwardTest);

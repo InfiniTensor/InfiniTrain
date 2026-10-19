@@ -14,51 +14,51 @@ class Stream;
 namespace infini_train::core::cuda {
 
 class CudaEvent final : public Event {
-public:
-    explicit CudaEvent(EventFlag flags = EventFlag::kDefault);
-    ~CudaEvent() override;
+ public:
+  explicit CudaEvent(EventFlag flags = EventFlag::kDefault);
+  ~CudaEvent() override;
 
-    cudaEvent_t cuda_event() const;
+  cudaEvent_t cuda_event() const;
 
-private:
-    cudaEvent_t event_ = nullptr;
+ private:
+  cudaEvent_t event_ = nullptr;
 };
 
 class CudaStream : public Stream {
-public:
-    CudaStream();
-    explicit CudaStream(int priority);
+ public:
+  CudaStream();
+  explicit CudaStream(int priority);
 
-    // NOTE(dcj):
-    // The CudaStream are "leaked": they are created but never destroyed because the
-    // destruction of global variables could happen after the CUDA runtime has
-    // already been destroyed and thus invoking cudaStreamDestroy could lead to a
-    // crash. It's likely an issue in CUDA, but to be safe - let's just "forget"
-    // the destruction.
-    ~CudaStream() override;
+  // NOTE(dcj):
+  // The CudaStream are "leaked": they are created but never destroyed because
+  // the destruction of global variables could happen after the CUDA runtime has
+  // already been destroyed and thus invoking cudaStreamDestroy could lead to a
+  // crash. It's likely an issue in CUDA, but to be safe - let's just "forget"
+  // the destruction.
+  ~CudaStream() override;
 
-    cudaStream_t cuda_stream() const;
+  cudaStream_t cuda_stream() const;
 
-private:
-    cudaStream_t stream_ = nullptr;
+ private:
+  cudaStream_t stream_ = nullptr;
 };
 
 class CudaBlasHandle : public BlasHandle {
-public:
-    explicit CudaBlasHandle(Stream *stream);
+ public:
+  explicit CudaBlasHandle(Stream *stream);
 
-    // NOTE(dcj):
-    // The CudaBlasHandle are "leaked": they are created but never destroyed because the
-    // destruction of global variables could happen after the CUDA runtime has
-    // already been destroyed and thus invoking ccublasDestroy could lead to a
-    // crash. It's likely an issue in CUDA, but to be safe - let's just "forget"
-    // the destruction.
-    ~CudaBlasHandle() override;
+  // NOTE(dcj):
+  // The CudaBlasHandle are "leaked": they are created but never destroyed
+  // because the destruction of global variables could happen after the CUDA
+  // runtime has already been destroyed and thus invoking ccublasDestroy could
+  // lead to a crash. It's likely an issue in CUDA, but to be safe - let's just
+  // "forget" the destruction.
+  ~CudaBlasHandle() override;
 
-    cublasHandle_t cublas_handle() const;
+  cublasHandle_t cublas_handle() const;
 
-private:
-    cublasHandle_t cublas_handle_;
+ private:
+  cublasHandle_t cublas_handle_;
 };
 
-} // namespace infini_train::core::cuda
+}  // namespace infini_train::core::cuda

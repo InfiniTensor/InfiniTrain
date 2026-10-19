@@ -10,11 +10,11 @@
 
 namespace infini_train::nn::parallel::comm {
 enum class ReduceOpType : int8_t;
-} // namespace infini_train::nn::parallel::comm
+}  // namespace infini_train::nn::parallel::comm
 
 namespace infini_train {
 enum class DataType : int8_t;
-} // namespace infini_train
+}  // namespace infini_train
 
 namespace infini_train::core {
 
@@ -24,89 +24,101 @@ class CclUniqueId;
 enum class CclStatus : int32_t;
 
 class CclImpl {
-public:
-    CclImpl() {}
-    virtual ~CclImpl() = default;
+ public:
+  CclImpl() {}
+  virtual ~CclImpl() = default;
 
-    virtual Device::DeviceType Type() const = 0;
+  virtual Device::DeviceType Type() const = 0;
 
-    virtual void GroupStart() const;
+  virtual void GroupStart() const;
 
-    virtual void GroupEnd() const;
+  virtual void GroupEnd() const;
 
-    virtual void GetAsyncError(const CclComm *comm, CclStatus *async_error) const;
+  virtual void GetAsyncError(const CclComm *comm, CclStatus *async_error) const;
 
-    virtual void GetUniqueId(CclUniqueId **unique_id) const;
+  virtual void GetUniqueId(CclUniqueId **unique_id) const;
 
-    virtual void CommInitAll(CclComm **comms, int ndev, const int *devlist) const;
+  virtual void CommInitAll(CclComm **comms, int ndev, const int *devlist) const;
 
-    virtual void CommInitRank(CclComm **comm, int nranks, const CclUniqueId &unique_id, int rank) const;
+  virtual void CommInitRank(CclComm **comm, int nranks,
+                            const CclUniqueId &unique_id, int rank) const;
 
-    virtual void CommDestroy(CclComm *comm) const;
+  virtual void CommDestroy(CclComm *comm) const;
 
-    virtual void AllReduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                           nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const;
+  virtual void AllReduce(const void *sendbuff, void *recvbuff, size_t count,
+                         DataType dtype,
+                         nn::parallel::comm::ReduceOpType reduce_op,
+                         const CclComm *comm, Stream *stream) const;
 
-    virtual void Broadcast(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, int root,
-                           const CclComm *comm, Stream *stream) const;
+  virtual void Broadcast(const void *sendbuff, void *recvbuff, size_t count,
+                         DataType dtype, int root, const CclComm *comm,
+                         Stream *stream) const;
 
-    virtual void Reduce(const void *sendbuff, void *recvbuff, size_t count, DataType dtype,
-                        nn::parallel::comm::ReduceOpType reduce_op, int root, const CclComm *comm,
+  virtual void Reduce(const void *sendbuff, void *recvbuff, size_t count,
+                      DataType dtype,
+                      nn::parallel::comm::ReduceOpType reduce_op, int root,
+                      const CclComm *comm, Stream *stream) const;
+
+  virtual void AllGather(const void *sendbuff, void *recvbuff, size_t count,
+                         DataType dtype, const CclComm *comm,
+                         Stream *stream) const;
+
+  virtual void ReduceScatter(const void *sendbuff, void *recvbuff,
+                             size_t recv_count, DataType dtype,
+                             nn::parallel::comm::ReduceOpType reduce_op,
+                             const CclComm *comm, Stream *stream) const;
+
+  virtual void AlltoAll(const void *sendbuff, void *recvbuff, size_t count,
+                        DataType dtype, const CclComm *comm,
                         Stream *stream) const;
 
-    virtual void AllGather(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
-                           Stream *stream) const;
+  virtual void Send(const void *buff, size_t count, DataType dtype, int peer,
+                    const CclComm *comm, Stream *stream) const;
 
-    virtual void ReduceScatter(const void *sendbuff, void *recvbuff, size_t recv_count, DataType dtype,
-                               nn::parallel::comm::ReduceOpType reduce_op, const CclComm *comm, Stream *stream) const;
-
-    virtual void AlltoAll(const void *sendbuff, void *recvbuff, size_t count, DataType dtype, const CclComm *comm,
-                          Stream *stream) const;
-
-    virtual void Send(const void *buff, size_t count, DataType dtype, int peer, const CclComm *comm,
-                      Stream *stream) const;
-
-    virtual void Recv(void *buff, size_t count, DataType dtype, int peer, const CclComm *comm, Stream *stream) const;
+  virtual void Recv(void *buff, size_t count, DataType dtype, int peer,
+                    const CclComm *comm, Stream *stream) const;
 };
 
 class CclGroupGuard {
-public:
-    explicit CclGroupGuard(Device::DeviceType type);
-    ~CclGroupGuard();
+ public:
+  explicit CclGroupGuard(Device::DeviceType type);
+  ~CclGroupGuard();
 
-    CclGroupGuard(const CclGroupGuard &) = delete;
-    CclGroupGuard &operator=(const CclGroupGuard &) = delete;
-    CclGroupGuard(CclGroupGuard &&) = delete;
-    CclGroupGuard &operator=(CclGroupGuard &&) = delete;
+  CclGroupGuard(const CclGroupGuard &) = delete;
+  CclGroupGuard &operator=(const CclGroupGuard &) = delete;
+  CclGroupGuard(CclGroupGuard &&) = delete;
+  CclGroupGuard &operator=(CclGroupGuard &&) = delete;
 
-private:
-    CclImpl *impl_ = nullptr;
+ private:
+  CclImpl *impl_ = nullptr;
 };
 
 class CclImplRegistry {
-public:
-    static CclImplRegistry &Instance();
+ public:
+  static CclImplRegistry &Instance();
 
-    void Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl);
+  void Register(Device::DeviceType type, std::unique_ptr<CclImpl> impl);
 
-    bool Has(Device::DeviceType type) const;
+  bool Has(Device::DeviceType type) const;
 
-    CclImpl *Get(Device::DeviceType type) const;
+  CclImpl *Get(Device::DeviceType type) const;
 
-private:
-    CclImplRegistry() = default;
-    CclImplRegistry(const CclImplRegistry &) = delete;
-    CclImplRegistry &operator=(const CclImplRegistry &) = delete;
+ private:
+  CclImplRegistry() = default;
+  CclImplRegistry(const CclImplRegistry &) = delete;
+  CclImplRegistry &operator=(const CclImplRegistry &) = delete;
 
-    std::unordered_map<Device::DeviceType, std::unique_ptr<CclImpl>> impls_;
+  std::unordered_map<Device::DeviceType, std::unique_ptr<CclImpl>> impls_;
 };
 
 CclImpl *GetCclImpl(Device::DeviceType type);
 
-} // namespace infini_train::core
+}  // namespace infini_train::core
 
-#define INFINI_TRAIN_REGISTER_CCL_IMPL(device_type, class_impl)                                                        \
-    [[maybe_unused]] static const bool CAT(infini_train_ccl_registered_, __COUNTER__) = []() {                         \
-        infini_train::core::CclImplRegistry::Instance().Register(device_type, std::make_unique<class_impl>());         \
-        return true;                                                                                                   \
-    }();
+#define INFINI_TRAIN_REGISTER_CCL_IMPL(device_type, class_impl)        \
+  [[maybe_unused]] static const bool CAT(infini_train_ccl_registered_, \
+                                         __COUNTER__) = []() {         \
+    infini_train::core::CclImplRegistry::Instance().Register(          \
+        device_type, std::make_unique<class_impl>());                  \
+    return true;                                                       \
+  }();

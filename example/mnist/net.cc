@@ -16,17 +16,17 @@
 namespace nn = infini_train::nn;
 
 MNIST::MNIST() {
-    std::vector<std::shared_ptr<nn::Module>> layers;
-    layers.push_back(std::make_shared<nn::Linear>(784, 30));
-    layers.push_back(std::make_shared<nn::Sigmoid>());
-    modules_["sequential"] = std::make_shared<nn::Sequential>(std::move(layers));
-    modules_["linear2"] = std::make_shared<nn::Linear>(30, 10);
+  std::vector<std::shared_ptr<nn::Module>> layers;
+  layers.push_back(std::make_shared<nn::Linear>(784, 30));
+  layers.push_back(std::make_shared<nn::Sigmoid>());
+  modules_["sequential"] = std::make_shared<nn::Sequential>(std::move(layers));
+  modules_["linear2"] = std::make_shared<nn::Linear>(30, 10);
 }
 
-std::vector<std::shared_ptr<infini_train::Tensor>>
-MNIST::Forward(const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
-    CHECK_EQ(x.size(), 1);
-    auto x1 = (*modules_["sequential"])(x);
-    auto x2 = (*modules_["linear2"])(x1);
-    return x2;
+std::vector<std::shared_ptr<infini_train::Tensor>> MNIST::Forward(
+    const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
+  CHECK_EQ(x.size(), 1);
+  auto x1 = (*modules_["sequential"])(x);
+  auto x2 = (*modules_["linear2"])(x1);
+  return x2;
 }

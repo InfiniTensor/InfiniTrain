@@ -23,86 +23,101 @@ namespace infini_train::nn::parallel {
 namespace {
 constexpr char kModuleName[] = "module";
 
-std::vector<std::vector<std::shared_ptr<Tensor>>>
-ParallelApply(const std::vector<std::shared_ptr<Module>> &modules,
-              const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs, const std::vector<Device> &devices) {
-    CHECK_EQ(modules.size(), inputs.size()) << std::format(
-        "The number of modules {} is not equal to the number of inputs {}", modules.size(), inputs.size());
-    CHECK_EQ(modules.size(), devices.size());
+std::vector<std::vector<std::shared_ptr<Tensor>>> ParallelApply(
+    const std::vector<std::shared_ptr<Module>> &modules,
+    const std::vector<std::vector<std::shared_ptr<Tensor>>> &inputs,
+    const std::vector<Device> &devices) {
+  CHECK_EQ(modules.size(), inputs.size()) << std::format(
+      "The number of modules {} is not equal to the number of inputs {}",
+      modules.size(), inputs.size());
+  CHECK_EQ(modules.size(), devices.size());
 
-    // pre-allocate results so we do not need lock in the worker threads
-    std::vector<std::optional<std::vector<std::shared_ptr<Tensor>>>> results(modules.size(), std::nullopt);
+  // pre-allocate results so we do not need lock in the worker threads
+  std::vector<std::optional<std::vector<std::shared_ptr<Tensor>>>> results(
+      modules.size(), std::nullopt);
 
-    auto worker = [&](const std::shared_ptr<Module> &module, const std::vector<std::shared_ptr<Tensor>> &inputs,
-                      Device device, int idx) {
-        core::DeviceGuard guard(device);
-        auto output = (*module)(inputs);
-        results[idx] = output;
-    };
+  auto worker = [&](const std::shared_ptr<Module> &module,
+                    const std::vector<std::shared_ptr<Tensor>> &inputs,
+                    Device device, int idx) {
+    core::DeviceGuard guard(device);
+    auto output = (*module)(inputs);
+    results[idx] = output;
+  };
 
-    if (modules.size() > 1) {
-        std::vector<std::thread> threads;
-        for (int idx = 0; idx < modules.size(); ++idx) {
-            threads.emplace_back(worker, modules[idx], inputs[idx], devices[idx], idx);
-        }
-        for (int idx = 0; idx < threads.size(); ++idx) { threads[idx].join(); }
-    } else {
-        worker(modules[0], inputs[0], devices[0], 0);
+  if (modules.size() > 1) {
+    std::vector<std::thread> threads;
+    for (int idx = 0; idx < modules.size(); ++idx) {
+      threads.emplace_back(worker, modules[idx], inputs[idx], devices[idx],
+                           idx);
     }
-
-    std::vector<std::vector<std::shared_ptr<Tensor>>> outputs;
-    for (int idx = 0; idx < inputs.size(); ++idx) {
-        auto output = results[idx];
-        if (!output) {
-            LOG(FATAL) << "ParallelApply worker thread " << idx << " did not return a result";
-        }
-        outputs.push_back(output.value());
+    for (int idx = 0; idx < threads.size(); ++idx) {
+      threads[idx].join();
     }
-    return outputs;
+  } else {
+    worker(modules[0], inputs[0], devices[0], 0);
+  }
+
+  std::vector<std::vector<std::shared_ptr<Tensor>>> outputs;
+  for (int idx = 0; idx < inputs.size(); ++idx) {
+    auto output = results[idx];
+    if (!output) {
+      LOG(FATAL) << "ParallelApply worker thread " << idx
+                 << " did not return a result";
+    }
+    outputs.push_back(output.value());
+  }
+  return outputs;
 }
-} // namespace
+}  // namespace
 
-DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim, Device::DeviceType device_type) : dim_(dim) {
-    devices_.reserve(global::GetNthreadPerProc());
-    for (int thread_rank = 0; thread_rank < global::GetNthreadPerProc(); ++thread_rank) {
-        const int device_index = global::GetDeviceIndex(thread_rank);
-        devices_.emplace_back(device_type, device_index);
-    }
+DataParallel::DataParallel(const std::shared_ptr<Module> &module, int dim,
+                           Device::DeviceType device_type)
+    : dim_(dim) {
+  devices_.reserve(global::GetNthreadPerProc());
+  for (int thread_rank = 0; thread_rank < global::GetNthreadPerProc();
+       ++thread_rank) {
+    const int device_index = global::GetDeviceIndex(thread_rank);
+    devices_.emplace_back(device_type, device_index);
+  }
 
-    CHECK_GT(devices_.size(), 0) << "No available devices found";
-    output_device_ = devices_.at(0);
-    src_device_ = devices_.at(0);
+  CHECK_GT(devices_.size(), 0) << "No available devices found";
+  output_device_ = devices_.at(0);
+  src_device_ = devices_.at(0);
 
-    module->To(src_device_);
+  module->To(src_device_);
 
-    modules_[kModuleName] = std::move(module);
+  modules_[kModuleName] = std::move(module);
 
-    // TODO(dcj): implement check_balance for cuda devices later.
+  // TODO(dcj): implement check_balance for cuda devices later.
 
-    LOG(ERROR) << "DataParallel module created with " << devices_.size() << " devices";
+  LOG(ERROR) << "DataParallel module created with " << devices_.size()
+             << " devices";
 }
 
-std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    auto &module = modules_.at(kModuleName);
+std::vector<std::shared_ptr<Tensor>> DataParallel::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  auto &module = modules_.at(kModuleName);
 
-    for (auto tensor : module->Parameters()) {
-        if (tensor->GetDevice() != src_device_) {
-            LOG(FATAL) << std::format("module must have its Parameters on device {} (device_ids[0]) but found "
-                                      "one of them on device: {}",
-                                      src_device_.ToString(), tensor->GetDevice().ToString());
-        }
+  for (auto tensor : module->Parameters()) {
+    if (tensor->GetDevice() != src_device_) {
+      LOG(FATAL) << std::format(
+          "module must have its Parameters on device {} (device_ids[0]) but "
+          "found "
+          "one of them on device: {}",
+          src_device_.ToString(), tensor->GetDevice().ToString());
     }
+  }
 
-    auto scattered_inputs = function::Scatter(input_tensors, devices_, dim_);
+  auto scattered_inputs = function::Scatter(input_tensors, devices_, dim_);
 
-    if (devices_.size() == 1) {
-        return (*module)(scattered_inputs[0]);
-    }
+  if (devices_.size() == 1) {
+    return (*module)(scattered_inputs[0]);
+  }
 
-    auto replicas = function::Replicate(module, devices_);
+  auto replicas = function::Replicate(module, devices_);
 
-    auto outputs = ParallelApply(replicas, scattered_inputs, devices_);
+  auto outputs = ParallelApply(replicas, scattered_inputs, devices_);
 
-    return function::Gather(outputs, output_device_, dim_);
+  return function::Gather(outputs, output_device_, dim_);
 }
-} // namespace infini_train::nn::parallel
+}  // namespace infini_train::nn::parallel

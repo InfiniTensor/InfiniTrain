@@ -16,50 +16,55 @@ using namespace infini_train;
 class TensorDeleteTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(TensorDeleteTest, ReleasesResourcesOnReset) {
-    std::weak_ptr<Tensor> weak_tensor;
-    {
-        auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(),
-                                               /*requires_grad=*/true);
-        weak_tensor = tensor;
-    }
-    EXPECT_TRUE(weak_tensor.expired());
+  std::weak_ptr<Tensor> weak_tensor;
+  {
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                           DataType::kFLOAT32, GetDevice(),
+                                           /*requires_grad=*/true);
+    weak_tensor = tensor;
+  }
+  EXPECT_TRUE(weak_tensor.expired());
 }
 
 TEST_P(TensorDeleteTest, MoveTransferKeepsData) {
-    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    tensor->Fill(5.0f);
+  auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                         DataType::kFLOAT32, GetDevice());
+  tensor->Fill(5.0f);
 
-    auto moved = std::move(tensor);
-    EXPECT_EQ(tensor, nullptr);
-    ASSERT_NE(moved, nullptr);
-    test::ExpectTensorFloatEqual(moved, 5.0f);
+  auto moved = std::move(tensor);
+  EXPECT_EQ(tensor, nullptr);
+  ASSERT_NE(moved, nullptr);
+  test::ExpectTensorFloatEqual(moved, 5.0f);
 }
 
 TEST_P(TensorDeleteTest, NullifiesPointerOnMove) {
-    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{3, 3}, DataType::kFLOAT32, GetDevice());
-    EXPECT_NE(tensor, nullptr);
-    auto moved_tensor = std::move(tensor);
-    EXPECT_EQ(tensor, nullptr);
-    EXPECT_NE(moved_tensor, nullptr);
+  auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{3, 3},
+                                         DataType::kFLOAT32, GetDevice());
+  EXPECT_NE(tensor, nullptr);
+  auto moved_tensor = std::move(tensor);
+  EXPECT_EQ(tensor, nullptr);
+  EXPECT_NE(moved_tensor, nullptr);
 }
 
 TEST_P(TensorDeleteTest, SharedPtrRefCountOnCopy) {
-    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice());
-    auto copy1 = tensor;
-    auto copy2 = tensor;
-    EXPECT_EQ(tensor.use_count(), 3);
-    copy1.reset();
-    EXPECT_EQ(tensor.use_count(), 2);
-    copy2.reset();
-    EXPECT_EQ(tensor.use_count(), 1);
-    EXPECT_NE(tensor, nullptr);
+  auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                         DataType::kFLOAT32, GetDevice());
+  auto copy1 = tensor;
+  auto copy2 = tensor;
+  EXPECT_EQ(tensor.use_count(), 3);
+  copy1.reset();
+  EXPECT_EQ(tensor.use_count(), 2);
+  copy2.reset();
+  EXPECT_EQ(tensor.use_count(), 1);
+  EXPECT_NE(tensor, nullptr);
 }
 
 TEST_P(TensorDeleteTest, TensorDestroyedAfterScope) {
-    {
-        auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 2}, DataType::kFLOAT32, GetDevice());
-        EXPECT_NE(tensor, nullptr);
-    }
+  {
+    auto tensor = std::make_shared<Tensor>(std::vector<int64_t>{2, 2},
+                                           DataType::kFLOAT32, GetDevice());
+    EXPECT_NE(tensor, nullptr);
+  }
 }
 
 INFINI_TRAIN_REGISTER_TEST(TensorDeleteTest);

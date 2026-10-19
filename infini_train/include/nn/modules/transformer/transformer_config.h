@@ -7,122 +7,136 @@
 namespace infini_train::nn {
 
 enum class PositionEmbeddingType {
-    kLearnedAbsolute, // Megatron: learned_absolute
-    kRoPE,            // Megatron: rope
-    kYarn,            // Megatron: yarn
-    kMRoPE,           // Megatron: mrope
-    kRelative,        // Megatron: relative
-    kNone             // Megatron: none
+  kLearnedAbsolute,  // Megatron: learned_absolute
+  kRoPE,             // Megatron: rope
+  kYarn,             // Megatron: yarn
+  kMRoPE,            // Megatron: mrope
+  kRelative,         // Megatron: relative
+  kNone              // Megatron: none
 };
 
 enum class MLPType {
-    kGELU,  // GELU activation
-    kSwiGLU // SwiGLU activation
+  kGELU,   // GELU activation
+  kSwiGLU  // SwiGLU activation
 };
 
 enum class FFNType {
-    kDense, // Standard dense MLP
-    kMoE    // Mixture-of-Experts MLP
+  kDense,  // Standard dense MLP
+  kMoE     // Mixture-of-Experts MLP
 };
 
 enum class NormType {
-    kLayerNorm, // LayerNorm
-    kRMSNorm    // RMSNorm
+  kLayerNorm,  // LayerNorm
+  kRMSNorm     // RMSNorm
 };
 
 struct MoEConfig {
-    enum class RouterScoreFunction {
-        kSoftmax,
-        kSigmoid,
-    };
+  enum class RouterScoreFunction {
+    kSoftmax,
+    kSigmoid,
+  };
 
-    enum class TokenDispatcherType {
-        kAllGather // Megatron-style AllGather dispatcher. Degenerates to local dispatch when TP=EP=1.
-    };
+  enum class TokenDispatcherType {
+    kAllGather  // Megatron-style AllGather dispatcher. Degenerates to local
+                // dispatch when TP=EP=1.
+  };
 
-    enum class ExpertImpl {
-        kSequential // Run local experts sequentially
-    };
+  enum class ExpertImpl {
+    kSequential  // Run local experts sequentially
+  };
 
-    int64_t num_experts = 0;
-    int64_t router_topk = 1;
-    bool router_pre_softmax = false;
-    std::optional<float> router_topk_scaling_factor = std::nullopt;
-    RouterScoreFunction router_score_function = RouterScoreFunction::kSoftmax;
-    int64_t moe_ffn_hidden_size = 0;
-    TokenDispatcherType token_dispatcher_type = TokenDispatcherType::kAllGather;
-    ExpertImpl expert_impl = ExpertImpl::kSequential;
+  int64_t num_experts = 0;
+  int64_t router_topk = 1;
+  bool router_pre_softmax = false;
+  std::optional<float> router_topk_scaling_factor = std::nullopt;
+  RouterScoreFunction router_score_function = RouterScoreFunction::kSoftmax;
+  int64_t moe_ffn_hidden_size = 0;
+  TokenDispatcherType token_dispatcher_type = TokenDispatcherType::kAllGather;
+  ExpertImpl expert_impl = ExpertImpl::kSequential;
 };
 
 enum class ActivationRecomputeGranularity {
-    kNone,      // Disable activation recompute.
-    kFull,      // Recompute full transformer layers.
-    kSelective, // Recompute selected transformer submodules.
+  kNone,       // Disable activation recompute.
+  kFull,       // Recompute full transformer layers.
+  kSelective,  // Recompute selected transformer submodules.
 };
 
 enum class ActivationRecomputeMethod {
-    kNone,    // Recompute every layer when granularity is full.
-    kUniform, // Uniformly divide layers into recompute chunks.
-    kBlock,   // Recompute only the first N layers in the local chunk/stage.
+  kNone,     // Recompute every layer when granularity is full.
+  kUniform,  // Uniformly divide layers into recompute chunks.
+  kBlock,    // Recompute only the first N layers in the local chunk/stage.
 };
 
 struct ActivationRecomputeOptions {
-    ActivationRecomputeGranularity granularity = ActivationRecomputeGranularity::kNone;
-    ActivationRecomputeMethod method = ActivationRecomputeMethod::kNone;
-    int64_t num_layers = 0;
+  ActivationRecomputeGranularity granularity =
+      ActivationRecomputeGranularity::kNone;
+  ActivationRecomputeMethod method = ActivationRecomputeMethod::kNone;
+  int64_t num_layers = 0;
 };
 
 struct TransformerConfig {
-    int64_t block_size = 1024;           // Max seq_len
-    int64_t vocab_size = 50304;          // Vocab size
-    int64_t original_vocab_size = 50257; // Original vocab size before padding
-    int64_t n_layer = 12;                // Num of transformer layers
-    int64_t n_head = 12;                 // Num of heads in MHA
-    int64_t n_kv_head = 12;              // Num of Key/Value heads (<= n_head, < n_head if using GQA)
-    int64_t n_embd = 768;                // Hidden size
+  int64_t block_size = 1024;            // Max seq_len
+  int64_t vocab_size = 50304;           // Vocab size
+  int64_t original_vocab_size = 50257;  // Original vocab size before padding
+  int64_t n_layer = 12;                 // Num of transformer layers
+  int64_t n_head = 12;                  // Num of heads in MHA
+  int64_t n_kv_head =
+      12;  // Num of Key/Value heads (<= n_head, < n_head if using GQA)
+  int64_t n_embd = 768;  // Hidden size
 
-    PositionEmbeddingType position_embedding_type = PositionEmbeddingType::kLearnedAbsolute; // Position embedding type
-    MLPType activation_type = MLPType::kGELU;                                                // MLP activation type
-    FFNType ffn_type = FFNType::kDense;                                                      // Feed-forward module type
-    NormType norm_type = NormType::kLayerNorm;                                               // Normalization type
+  PositionEmbeddingType position_embedding_type =
+      PositionEmbeddingType::kLearnedAbsolute;  // Position embedding type
+  MLPType activation_type = MLPType::kGELU;     // MLP activation type
+  FFNType ffn_type = FFNType::kDense;           // Feed-forward module type
+  NormType norm_type = NormType::kLayerNorm;    // Normalization type
 
-    bool add_bias_linear = true; // Whether to add learnable bias to all Linear layers in the Transformer block,
-                                 // including: attention QKV projection, attention output projection, MLP FC layers (and
-                                 // SwiGLU second projection), and MLP output projection.
-    bool add_bias_lm_head = false; // Whether to add bias to the LM head (output embedding).
-    bool tie_weights = true;       // Tie embedding and lm_head weights
+  bool add_bias_linear =
+      true;  // Whether to add learnable bias to all Linear layers in the
+             // Transformer block, including: attention QKV projection,
+             // attention output projection, MLP FC layers (and SwiGLU second
+             // projection), and MLP output projection.
+  bool add_bias_lm_head =
+      false;  // Whether to add bias to the LM head (output embedding).
+  bool tie_weights = true;  // Tie embedding and lm_head weights
 
-    // FFN config
-    std::optional<int64_t> ffn_hidden_size = std::nullopt; // Defaults to 4 * n_embd
-    std::optional<MoEConfig> moe_config = std::nullopt;
+  // FFN config
+  std::optional<int64_t> ffn_hidden_size =
+      std::nullopt;  // Defaults to 4 * n_embd
+  std::optional<MoEConfig> moe_config = std::nullopt;
 
-    // RoPE config
-    float rope_theta = 500000.0f;    // theta in RoPE
-    bool use_scaled_rope = false;    // scaled RoPE
-    bool rotary_interleaved = false; // True is rotate pairs of even and odd dimensions (RoFormer style), False is
-                                     // rotate pairs of first half and second half (LLaMa style).
+  // RoPE config
+  float rope_theta = 500000.0f;  // theta in RoPE
+  bool use_scaled_rope = false;  // scaled RoPE
+  bool rotary_interleaved =
+      false;  // True is rotate pairs of even and odd dimensions (RoFormer
+              // style), False is rotate pairs of first half and second half
+              // (LLaMa style).
 
-    // Normalization
-    float norm_eps = 1e-5f; // epsilon in RMSNorm
+  // Normalization
+  float norm_eps = 1e-5f;  // epsilon in RMSNorm
 
-    // Activation recomputation, aligned with Megatron-Core TransformerConfig.
-    ActivationRecomputeGranularity recompute_granularity = ActivationRecomputeGranularity::kNone;
-    ActivationRecomputeMethod recompute_method = ActivationRecomputeMethod::kNone;
-    int64_t recompute_num_layers = 0;
+  // Activation recomputation, aligned with Megatron-Core TransformerConfig.
+  ActivationRecomputeGranularity recompute_granularity =
+      ActivationRecomputeGranularity::kNone;
+  ActivationRecomputeMethod recompute_method = ActivationRecomputeMethod::kNone;
+  int64_t recompute_num_layers = 0;
 
-    // Inference
-    bool use_kv = false;            // kv cache
-    bool flash = false;             // flash attention
-    int64_t max_gen_batch_size = 4; // max batch size during inference
+  // Inference
+  bool use_kv = false;             // kv cache
+  bool flash = false;              // flash attention
+  int64_t max_gen_batch_size = 4;  // max batch size during inference
 
-    bool qk_layernorm = false; // Whether to apply `normalization` type of normalization to the query and key embeddings
+  bool qk_layernorm = false;  // Whether to apply `normalization` type of
+                              // normalization to the query and key embeddings
 
-    bool UseGQA() const;
-    int GetChunkSize() const;
-    bool RecomputeEnabled() const;
+  bool UseGQA() const;
+  int GetChunkSize() const;
+  bool RecomputeEnabled() const;
 };
 
-ActivationRecomputeOptions ParseActivationRecomputeOptions(bool enabled, std::string_view granularity,
-                                                           std::string_view method, int64_t num_layers);
-void ApplyActivationRecomputeOptions(TransformerConfig *config, const ActivationRecomputeOptions &options);
-} // namespace infini_train::nn
+ActivationRecomputeOptions ParseActivationRecomputeOptions(
+    bool enabled, std::string_view granularity, std::string_view method,
+    int64_t num_layers);
+void ApplyActivationRecomputeOptions(TransformerConfig *config,
+                                     const ActivationRecomputeOptions &options);
+}  // namespace infini_train::nn

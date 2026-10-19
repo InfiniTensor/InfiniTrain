@@ -7,35 +7,39 @@
 namespace nn = infini_train::nn;
 namespace gpt2 {
 inline nn::TransformerConfig GPT2Config() {
-    return {.block_size = 1024,
-            .vocab_size = 50304,
-            .original_vocab_size = 50257,
-            .n_layer = 12,
-            .n_head = 12,
-            .n_kv_head = 12,
-            .n_embd = 768,
-            .position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute,
-            .activation_type = nn::MLPType::kGELU,
-            .norm_type = nn::NormType::kLayerNorm,
-            .add_bias_linear = true,
-            .add_bias_lm_head = false,
-            .tie_weights = true,
-            .rotary_interleaved = true};
+  return {
+      .block_size = 1024,
+      .vocab_size = 50304,
+      .original_vocab_size = 50257,
+      .n_layer = 12,
+      .n_head = 12,
+      .n_kv_head = 12,
+      .n_embd = 768,
+      .position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute,
+      .activation_type = nn::MLPType::kGELU,
+      .norm_type = nn::NormType::kLayerNorm,
+      .add_bias_linear = true,
+      .add_bias_lm_head = false,
+      .tie_weights = true,
+      .rotary_interleaved = true};
 }
 
 inline void SanitizeGPT2Config(const nn::TransformerConfig &c) {
-    CHECK_GT(c.block_size, 0);
-    CHECK_GT(c.vocab_size, 0);
-    CHECK_GE(c.vocab_size, c.original_vocab_size);
-    CHECK_GT(c.n_layer, 0);
-    CHECK_GT(c.n_head, 0);
-    CHECK_GT(c.n_embd, 0);
-    CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
-    CHECK_EQ(c.n_kv_head, c.n_head) << "GPT-2 does not use GQA; n_kv_head must equal n_head";
-    CHECK(c.position_embedding_type == nn::PositionEmbeddingType::kLearnedAbsolute)
-        << "GPT-2 requires learned absolute position embedding";
-    CHECK(c.activation_type == nn::MLPType::kGELU) << "GPT-2 requires GELU activation";
-    CHECK(c.norm_type == nn::NormType::kLayerNorm) << "GPT-2 requires LayerNorm";
+  CHECK_GT(c.block_size, 0);
+  CHECK_GT(c.vocab_size, 0);
+  CHECK_GE(c.vocab_size, c.original_vocab_size);
+  CHECK_GT(c.n_layer, 0);
+  CHECK_GT(c.n_head, 0);
+  CHECK_GT(c.n_embd, 0);
+  CHECK_EQ(c.n_embd % c.n_head, 0) << "n_embd must be divisible by n_head";
+  CHECK_EQ(c.n_kv_head, c.n_head)
+      << "GPT-2 does not use GQA; n_kv_head must equal n_head";
+  CHECK(c.position_embedding_type ==
+        nn::PositionEmbeddingType::kLearnedAbsolute)
+      << "GPT-2 requires learned absolute position embedding";
+  CHECK(c.activation_type == nn::MLPType::kGELU)
+      << "GPT-2 requires GELU activation";
+  CHECK(c.norm_type == nn::NormType::kLayerNorm) << "GPT-2 requires LayerNorm";
 }
 
-} // namespace gpt2
+}  // namespace gpt2

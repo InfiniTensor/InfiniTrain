@@ -10,7 +10,9 @@ def collect_log_files(base_dir: Path):
     for path in base_dir.rglob("*.log"):
         if path.name == "run_metadata.log":
             continue
-        if path.name.startswith(("build", "ctest_")) or path.name.endswith("_profile.log"):
+        if path.name.startswith(("build", "ctest_")) or path.name.endswith(
+            "_profile.log"
+        ):
             continue
 
         key = path.name
@@ -27,7 +29,9 @@ def exit_if_duplicate_logs(base_dir: Path, duplicates):
     if not duplicates:
         return
 
-    print(f"Found duplicate log basenames in {base_dir.resolve()}, cannot compare safely:")
+    print(
+        f"Found duplicate log basenames in {base_dir.resolve()}, cannot compare safely:"
+    )
     for name, paths in sorted(duplicates.items()):
         print(f"  {name}: {', '.join(str(p.relative_to(base_dir)) for p in paths)}")
     sys.exit(1)

@@ -22,22 +22,26 @@ struct LoRAConfig;
 namespace detail {
 
 // Internal helper for packed QKV tensors stored as [Q | K | V] along dim 0.
-std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows,
-                                                            int tp_rank, int tp_size);
+std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(
+    const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows, int tp_rank,
+    int tp_size);
 
-// Internal helper for TP-gathered packed QKV shards stored rank-major as [Q_i | K_i | V_i].
-std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
-                                                               int64_t q_rows, int tp_size);
+// Internal helper for TP-gathered packed QKV shards stored rank-major as [Q_i |
+// K_i | V_i].
+std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(
+    const std::shared_ptr<Tensor> &gathered_tensor, int64_t q_rows,
+    int tp_size);
 
 // Internal helper for packed SwiGLU tensors stored as [gate | up] along dim 0.
-std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int tp_rank,
-                                                               int tp_size);
+std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(
+    const std::shared_ptr<Tensor> &full_tensor, int tp_rank, int tp_size);
 
-// Internal helper for TP-gathered packed SwiGLU shards stored rank-major as [gate_i | up_i].
-std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
-                                                                  int tp_size);
+// Internal helper for TP-gathered packed SwiGLU shards stored rank-major as
+// [gate_i | up_i].
+std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(
+    const std::shared_ptr<Tensor> &gathered_tensor, int tp_size);
 
-} // namespace detail
+}  // namespace detail
 
 /**
  * Apply LoRA to a model (PEFT-style injection).
@@ -48,7 +52,8 @@ std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::sha
  *
  * The root module may be replaced if it matches the target.
  */
-std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config);
+std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model,
+                                     const LoRAConfig &config);
 
 /**
  * Inject LoRA modules into all matching submodules.
@@ -56,12 +61,14 @@ std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRACo
  * Performs structural replacement only (no freezing).
  * Root module may be replaced.
  */
-std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config);
+std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model,
+                                         const LoRAConfig &config);
 
 /**
  * Replace a submodule by its full path (e.g. "a.b.0.c").
  */
-void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path, std::shared_ptr<Module> new_module);
+void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path,
+                         std::shared_ptr<Module> new_module);
 
 /**
  * Freeze all parameters, then re-enable LoRA parameters.
@@ -77,12 +84,14 @@ void UnfreezeModel(std::shared_ptr<Module> model);
 /**
  * Return all LoRA parameters.
  */
-std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(const std::shared_ptr<Module> &model);
+std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(
+    const std::shared_ptr<Module> &model);
 
 /**
  * Return all non-LoRA parameters.
  */
-std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Module> &model);
+std::vector<std::shared_ptr<Tensor>> GetBaseParameters(
+    const std::shared_ptr<Module> &model);
 
 /**
  * Merge LoRA into base weights:
@@ -111,29 +120,34 @@ std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model);
 /**
  * Return a state dict containing only LoRA parameters from the current model.
  *
- * Under TP this returns the current rank's local shards for sharded LoRA tensors.
- * Use SaveLoRAWeights() for a portable adapter file with full/unsharded tensors.
+ * Under TP this returns the current rank's local shards for sharded LoRA
+ * tensors. Use SaveLoRAWeights() for a portable adapter file with
+ * full/unsharded tensors.
  */
-std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model);
+std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(
+    const std::shared_ptr<Module> &model);
 
 /**
  * Load LoRA parameters from a state dict. Full tensors are sliced for TP-local
  * parameters when the current model stores shards.
  */
-void LoadLoRAStateDict(std::shared_ptr<Module> model,
-                       const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
+void LoadLoRAStateDict(
+    std::shared_ptr<Module> model,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict);
 
 /**
  * Save only LoRA parameters to file. TP-sharded LoRA tensors are exported as
  * full/unsharded tensors so the file can be loaded with a different TP rank.
  */
-void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath);
+void SaveLoRAWeights(const std::shared_ptr<Module> &model,
+                     const std::string &filepath);
 
 /**
  * Load LoRA parameters from file. Packed QKV and SwiGLU LoRA-B tensors are
  * reordered into their rank-local packed layouts.
  */
-void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath);
+void LoadLoRAWeights(std::shared_ptr<Module> model,
+                     const std::string &filepath);
 
 /**
  * Count parameters with requires_grad == true.
@@ -148,7 +162,8 @@ int64_t CountTotalParameters(const std::shared_ptr<Module> &model);
 /**
  * Print total/trainable/frozen parameter summary.
  */
-void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank = -1);
+void PrintLoRASummary(const std::shared_ptr<Module> &model,
+                      int global_rank = -1);
 
 /**
  * Parse comma-separated target modules string.
@@ -158,6 +173,7 @@ void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank = -1
  * Returns:
  *   An unordered_set of target module names (whitespace trimmed).
  */
-std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets);
+std::unordered_set<std::string> ParseLoRATargetModules(
+    const std::string &targets);
 
-} // namespace infini_train::nn::lora
+}  // namespace infini_train::nn::lora

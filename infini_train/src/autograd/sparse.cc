@@ -7,32 +7,36 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-std::vector<std::shared_ptr<Tensor>> Embedding::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 2);
-    const auto &input = input_tensors[0];
-    const auto &weight = input_tensors[1];
+std::vector<std::shared_ptr<Tensor>> Embedding::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 2);
+  const auto &input = input_tensors[0];
+  const auto &weight = input_tensors[1];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingForward"}, input, weight)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "EmbeddingForward"}, input, weight)};
 }
 
-void Embedding::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                             const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    const auto &input = input_tensors[0];
-    const auto &weight = input_tensors[1];
-    weight_dims_ = weight->Dims();
-    ctx_.SaveForBackward({input});
+void Embedding::SetupContext(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+  const auto &input = input_tensors[0];
+  const auto &weight = input_tensors[1];
+  weight_dims_ = weight->Dims();
+  ctx_.SaveForBackward({input});
 }
 
-std::vector<std::shared_ptr<Tensor>> Embedding::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(grad_outputs.size(), 1);
-    auto saved_tensors = ctx_.GetSavedTensors();
-    const auto &input = saved_tensors[0];
-    const auto &grad_output = grad_outputs[0];
+std::vector<std::shared_ptr<Tensor>> Embedding::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+  CHECK_EQ(grad_outputs.size(), 1);
+  auto saved_tensors = ctx_.GetSavedTensors();
+  const auto &input = saved_tensors[0];
+  const auto &grad_output = grad_outputs[0];
 
-    auto device = input->GetDevice().type();
-    auto grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "EmbeddingBackward"}, input,
-                                                                            weight_dims_, grad_output);
-    return {nullptr, grad_weight};
+  auto device = input->GetDevice().type();
+  auto grad_weight = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "EmbeddingBackward"}, input, weight_dims_, grad_output);
+  return {nullptr, grad_weight};
 }
-} // namespace infini_train::autograd
+}  // namespace infini_train::autograd

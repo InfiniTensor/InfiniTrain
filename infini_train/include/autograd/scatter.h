@@ -14,18 +14,22 @@ class Tensor;
 namespace infini_train::autograd {
 
 class Scatter : public Function {
-public:
-    static constexpr char kType[] = "ScatterFunction";
+ public:
+  static constexpr char kType[] = "ScatterFunction";
 
-    explicit Scatter(const std::vector<int64_t> &output_dims) : Function(kType), output_dims_(output_dims) {}
+  explicit Scatter(const std::vector<int64_t> &output_dims)
+      : Function(kType), output_dims_(output_dims) {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+  void SetupContext(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
+  std::vector<std::shared_ptr<Tensor>> Backward(
+      const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
-private:
-    std::vector<int64_t> output_dims_;
+ private:
+  std::vector<int64_t> output_dims_;
 };
 
-} // namespace infini_train::autograd
+}  // namespace infini_train::autograd

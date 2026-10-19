@@ -15,114 +15,125 @@ namespace infini_train::core {
 // DeviceGuardImpl (base fallback: FATAL only)
 void DeviceGuardImpl::Initialize() {}
 
-void DeviceGuardImpl::SetDevice(Device) const { LOG(FATAL) << "DeviceGuardImpl::SetDevice is not implemented."; }
+void DeviceGuardImpl::SetDevice(Device) const {
+  LOG(FATAL) << "DeviceGuardImpl::SetDevice is not implemented.";
+}
 
 int DeviceGuardImpl::DeviceCount() const {
-    LOG(FATAL) << "DeviceGuardImpl::DeviceCount is not implemented.";
-    return -1; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::DeviceCount is not implemented.";
+  return -1;  // unreachable
 }
 
 Stream *DeviceGuardImpl::GetStream(Device) const {
-    LOG(FATAL) << "DeviceGuardImpl::GetStream is not implemented.";
-    return nullptr; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::GetStream is not implemented.";
+  return nullptr;  // unreachable
 }
 
 Stream *DeviceGuardImpl::CreateStream(Device) const {
-    LOG(FATAL) << "DeviceGuardImpl::CreateStream is not implemented.";
-    return nullptr; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::CreateStream is not implemented.";
+  return nullptr;  // unreachable
 }
 
 Stream *DeviceGuardImpl::CreateStreamWithPriority(Device, int) const {
-    LOG(FATAL) << "DeviceGuardImpl::CreateStreamWithPriority is not implemented.";
-    return nullptr; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::CreateStreamWithPriority is not implemented.";
+  return nullptr;  // unreachable
 }
 
 void DeviceGuardImpl::DestroyStream(Stream *) const {
-    LOG(FATAL) << "DeviceGuardImpl::DestroyStream is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::DestroyStream is not implemented.";
 }
 
 void DeviceGuardImpl::GetStreamPriorityRange(int *, int *) const {
-    LOG(FATAL) << "DeviceGuardImpl::GetStreamPriorityRange is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::GetStreamPriorityRange is not implemented.";
 }
 
-void DeviceGuardImpl::EventCreate(Event **) const { LOG(FATAL) << "DeviceGuardImpl::EventCreate is not implemented."; }
+void DeviceGuardImpl::EventCreate(Event **) const {
+  LOG(FATAL) << "DeviceGuardImpl::EventCreate is not implemented.";
+}
 
 void DeviceGuardImpl::EventCreateWithFlags(Event **, EventFlag) const {
-    LOG(FATAL) << "DeviceGuardImpl::EventCreateWithFlags is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::EventCreateWithFlags is not implemented.";
 }
 
-void DeviceGuardImpl::EventDestroy(Event *) const { LOG(FATAL) << "DeviceGuardImpl::EventDestroy is not implemented."; }
+void DeviceGuardImpl::EventDestroy(Event *) const {
+  LOG(FATAL) << "DeviceGuardImpl::EventDestroy is not implemented.";
+}
 
 void DeviceGuardImpl::EventRecord(Event *, Stream *) const {
-    LOG(FATAL) << "DeviceGuardImpl::EventRecord is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::EventRecord is not implemented.";
 }
 
 void DeviceGuardImpl::StreamWaitEvent(Stream *, Event *, uint32_t) const {
-    LOG(FATAL) << "DeviceGuardImpl::StreamWaitEvent is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::StreamWaitEvent is not implemented.";
 }
 
 RuntimeStatus DeviceGuardImpl::EventSynchronize(Event *) const {
-    LOG(FATAL) << "DeviceGuardImpl::EventSynchronize is not implemented.";
-    return RuntimeStatus::kError; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::EventSynchronize is not implemented.";
+  return RuntimeStatus::kError;  // unreachable
 }
 
 RuntimeStatus DeviceGuardImpl::EventQuery(Event *) const {
-    LOG(FATAL) << "DeviceGuardImpl::EventQuery is not implemented.";
-    return RuntimeStatus::kError; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::EventQuery is not implemented.";
+  return RuntimeStatus::kError;  // unreachable
 }
 
 float DeviceGuardImpl::EventElapsedTime(Event *, Event *) const {
-    LOG(FATAL) << "DeviceGuardImpl::EventElapsedTime is not implemented.";
-    return 0.0f; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::EventElapsedTime is not implemented.";
+  return 0.0f;  // unreachable
 }
 
 void DeviceGuardImpl::SynchronizeDevice(Device) const {
-    LOG(FATAL) << "DeviceGuardImpl::SynchronizeDevice is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::SynchronizeDevice is not implemented.";
 }
 
 void DeviceGuardImpl::SynchronizeStream(Stream *) const {
-    LOG(FATAL) << "DeviceGuardImpl::SynchronizeStream is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::SynchronizeStream is not implemented.";
 }
 
 BlasHandle *DeviceGuardImpl::GetBlasHandle(Device device) const {
-    LOG(FATAL) << "DeviceGuardImpl::GetBlasHandle is not implemented.";
-    return nullptr; // unreachable
+  LOG(FATAL) << "DeviceGuardImpl::GetBlasHandle is not implemented.";
+  return nullptr;  // unreachable
 }
 
 void DeviceGuardImpl::MallocAsync(void **dev_ptr, size_t size, Stream *stream) {
-    LOG(FATAL) << "DeviceGuardImpl::MallocAsync is not implemented.";
+  LOG(FATAL) << "DeviceGuardImpl::MallocAsync is not implemented.";
 }
 
 void DeviceGuardImpl::FreeAsync(void *dev_ptr, Stream *stream) {
-    LOG(FATAL) << "DeviceGuardImpl::FreeAsync is not implemented";
+  LOG(FATAL) << "DeviceGuardImpl::FreeAsync is not implemented";
 }
 
-void DeviceGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count, MemcpyKind kind, Stream *stream) {
-    LOG(FATAL) << "DeviceGuardImpl::MemcpyAsync is not implemented";
+void DeviceGuardImpl::MemcpyAsync(void *dst, const void *src, size_t count,
+                                  MemcpyKind kind, Stream *stream) {
+  LOG(FATAL) << "DeviceGuardImpl::MemcpyAsync is not implemented";
 }
 
 void DeviceGuardImpl::ResetMemPoolHighWatermarks(Device device) const {
-    LOG(FATAL) << "DeviceGuardImpl::ResetMemPoolHighWatermarks is not implemented.";
+  LOG(FATAL)
+      << "DeviceGuardImpl::ResetMemPoolHighWatermarks is not implemented.";
 }
 
-std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB(Device device) const {
-    LOG(FATAL) << "DeviceGuardImpl::GetMemPoolPeakMB is not implemented for device type {} (index {}).";
-    return {0, 0}; // unreachable
+std::pair<size_t, size_t> DeviceGuardImpl::GetMemPoolPeakMB(
+    Device device) const {
+  LOG(FATAL) << "DeviceGuardImpl::GetMemPoolPeakMB is not implemented for "
+                "device type {} (index {}).";
+  return {0, 0};  // unreachable
 }
 
 // DeviceGuard
-DeviceGuard::DeviceGuard(Device device) : impl_(GetDeviceGuardImpl(device.type())) {
-    original_device_ = impl_->GetDevice();
-    impl_->SetDevice(device);
-    current_device_ = device;
+DeviceGuard::DeviceGuard(Device device)
+    : impl_(GetDeviceGuardImpl(device.type())) {
+  original_device_ = impl_->GetDevice();
+  impl_->SetDevice(device);
+  current_device_ = device;
 }
 
 void DeviceGuard::SetDevice(Device device) {
-    if (current_device_ == device) {
-        return;
-    }
-    impl_->SetDevice(device);
-    current_device_ = device;
+  if (current_device_ == device) {
+    return;
+  }
+  impl_->SetDevice(device);
+  current_device_ = device;
 }
 
 Device DeviceGuard::current_device() const { return current_device_; }
@@ -133,37 +144,43 @@ DeviceGuard::~DeviceGuard() { impl_->SetDevice(original_device_); }
 
 // DeviceGuardImplRegistry
 DeviceGuardImplRegistry &DeviceGuardImplRegistry::Instance() {
-    static DeviceGuardImplRegistry instance;
-    return instance;
+  static DeviceGuardImplRegistry instance;
+  return instance;
 }
 
-void DeviceGuardImplRegistry::Register(Device::DeviceType type, std::unique_ptr<DeviceGuardImpl> impl) {
-    if (type != impl->Type()) {
-        LOG(FATAL) << std::format("Register device guard impl with type {}, but as type {}",
-                                  static_cast<int>(impl->Type()), static_cast<int>(type));
-    }
+void DeviceGuardImplRegistry::Register(Device::DeviceType type,
+                                       std::unique_ptr<DeviceGuardImpl> impl) {
+  if (type != impl->Type()) {
+    LOG(FATAL) << std::format(
+        "Register device guard impl with type {}, but as type {}",
+        static_cast<int>(impl->Type()), static_cast<int>(type));
+  }
 
-    if (impls_.contains(type)) {
-        LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registered", static_cast<int>(type));
-    }
+  if (impls_.contains(type)) {
+    LOG(FATAL) << std::format("DeviceGuardImpl for type {} already registered",
+                              static_cast<int>(type));
+  }
 
-    impls_[type] = std::move(impl);
+  impls_[type] = std::move(impl);
 }
 
-bool DeviceGuardImplRegistry::Has(Device::DeviceType type) const { return impls_.contains(type); }
+bool DeviceGuardImplRegistry::Has(Device::DeviceType type) const {
+  return impls_.contains(type);
+}
 
 DeviceGuardImpl *DeviceGuardImplRegistry::Get(Device::DeviceType type) const {
-    auto it = impls_.find(type);
-    if (it == impls_.end()) {
-        LOG(FATAL) << "No DeviceGuardImpl registered for type " << static_cast<int>(type);
-    }
-    return it->second.get();
+  auto it = impls_.find(type);
+  if (it == impls_.end()) {
+    LOG(FATAL) << "No DeviceGuardImpl registered for type "
+               << static_cast<int>(type);
+  }
+  return it->second.get();
 }
 
 DeviceGuardImpl *GetDeviceGuardImpl(Device::DeviceType type) {
-    auto *impl = DeviceGuardImplRegistry::Instance().Get(type);
-    impl->Initialize();
-    return impl;
+  auto *impl = DeviceGuardImplRegistry::Instance().Get(type);
+  impl->Initialize();
+  return impl;
 }
 
-} // namespace infini_train::core
+}  // namespace infini_train::core

@@ -10,105 +10,121 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::autograd {
-std::vector<std::shared_ptr<Tensor>> Mean::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 1);
-    const auto &input = input_tensors[0];
+std::vector<std::shared_ptr<Tensor>> Mean::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 1);
+  const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanForward"}, input, dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MeanForward"}, input, dim_, keep_dim_)};
 }
 
-void Mean::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                        const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    const auto &input = input_tensors[0];
-    input_dims_ = input->Dims();
+void Mean::SetupContext(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+  const auto &input = input_tensors[0];
+  input_dims_ = input->Dims();
 }
 
-std::vector<std::shared_ptr<Tensor>> Mean::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(grad_outputs.size(), 1);
-    const auto &grad_output = grad_outputs[0];
+std::vector<std::shared_ptr<Tensor>> Mean::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+  CHECK_EQ(grad_outputs.size(), 1);
+  const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MeanBackward"}, grad_output, input_dims_,
-                                                                 dim_, keep_dim_)};
+  auto device = grad_output->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MeanBackward"}, grad_output, input_dims_, dim_, keep_dim_)};
 }
 
-std::vector<std::shared_ptr<Tensor>> Sum::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 1);
-    const auto &input = input_tensors[0];
+std::vector<std::shared_ptr<Tensor>> Sum::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 1);
+  const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumForward"}, input, dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "SumForward"}, input, dim_, keep_dim_)};
 }
 
-void Sum::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    const auto &input = input_tensors[0];
-    input_dims_ = input->Dims();
+void Sum::SetupContext(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+  const auto &input = input_tensors[0];
+  input_dims_ = input->Dims();
 }
 
-std::vector<std::shared_ptr<Tensor>> Sum::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(grad_outputs.size(), 1);
-    const auto &grad_output = grad_outputs[0];
+std::vector<std::shared_ptr<Tensor>> Sum::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+  CHECK_EQ(grad_outputs.size(), 1);
+  const auto &grad_output = grad_outputs[0];
 
-    auto device = grad_output->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "SumBackward"}, grad_output, input_dims_,
-                                                                 dim_, keep_dim_)};
+  auto device = grad_output->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "SumBackward"}, grad_output, input_dims_, dim_, keep_dim_)};
 }
 
-std::vector<std::shared_ptr<Tensor>> Max::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 1);
-    const auto &input = input_tensors[0];
+std::vector<std::shared_ptr<Tensor>> Max::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 1);
+  const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxForward"}, input, dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MaxForward"}, input, dim_, keep_dim_)};
 }
 
-void Max::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    const auto &input = input_tensors[0];
-    const auto &output = output_tensors[0];
-    ctx_.SaveForBackward({input, output});
+void Max::SetupContext(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+  const auto &input = input_tensors[0];
+  const auto &output = output_tensors[0];
+  ctx_.SaveForBackward({input, output});
 }
 
-std::vector<std::shared_ptr<Tensor>> Max::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(grad_outputs.size(), 1);
-    auto saved_tensors = ctx_.GetSavedTensors();
-    CHECK_EQ(saved_tensors.size(), 2);
-    const auto &grad_output = grad_outputs[0];
-    const auto &input = saved_tensors[0];
-    const auto &reduced = saved_tensors[1];
+std::vector<std::shared_ptr<Tensor>> Max::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+  CHECK_EQ(grad_outputs.size(), 1);
+  auto saved_tensors = ctx_.GetSavedTensors();
+  CHECK_EQ(saved_tensors.size(), 2);
+  const auto &grad_output = grad_outputs[0];
+  const auto &input = saved_tensors[0];
+  const auto &reduced = saved_tensors[1];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MaxBackward"}, grad_output, input, reduced,
-                                                                 dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MaxBackward"}, grad_output, input, reduced, dim_, keep_dim_)};
 }
 
-std::vector<std::shared_ptr<Tensor>> Min::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    CHECK_EQ(input_tensors.size(), 1);
-    const auto &input = input_tensors[0];
+std::vector<std::shared_ptr<Tensor>> Min::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 1);
+  const auto &input = input_tensors[0];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinForward"}, input, dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MinForward"}, input, dim_, keep_dim_)};
 }
 
-void Min::SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                       const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
-    const auto &input = input_tensors[0];
-    const auto &output = output_tensors[0];
-    ctx_.SaveForBackward({input, output});
+void Min::SetupContext(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+    const std::vector<std::shared_ptr<Tensor>> &output_tensors) {
+  const auto &input = input_tensors[0];
+  const auto &output = output_tensors[0];
+  ctx_.SaveForBackward({input, output});
 }
 
-std::vector<std::shared_ptr<Tensor>> Min::Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-    CHECK_EQ(grad_outputs.size(), 1);
-    auto saved_tensors = ctx_.GetSavedTensors();
-    CHECK_EQ(saved_tensors.size(), 2);
-    const auto &grad_output = grad_outputs[0];
-    const auto &input = saved_tensors[0];
-    const auto &reduced = saved_tensors[1];
+std::vector<std::shared_ptr<Tensor>> Min::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
+  CHECK_EQ(grad_outputs.size(), 1);
+  auto saved_tensors = ctx_.GetSavedTensors();
+  CHECK_EQ(saved_tensors.size(), 2);
+  const auto &grad_output = grad_outputs[0];
+  const auto &input = saved_tensors[0];
+  const auto &reduced = saved_tensors[1];
 
-    auto device = input->GetDevice().type();
-    return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>({device, "MinBackward"}, grad_output, input, reduced,
-                                                                 dim_, keep_dim_)};
+  auto device = input->GetDevice().type();
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {device, "MinBackward"}, grad_output, input, reduced, dim_, keep_dim_)};
 }
-} // namespace infini_train::autograd
+}  // namespace infini_train::autograd

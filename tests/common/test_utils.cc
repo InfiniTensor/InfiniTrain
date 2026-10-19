@@ -6,14 +6,18 @@ namespace infini_train::test {
 
 Device InfiniTrainTest::GetDevice() const {
 #if defined(INFINI_TRAIN_TEST_DEVICE_INDEX)
-    return Device(GetParam(), INFINI_TRAIN_TEST_DEVICE_INDEX);
+  return Device(GetParam(), INFINI_TRAIN_TEST_DEVICE_INDEX);
 #else
-    return Device(GetParam(), 0);
+  return Device(GetParam(), 0);
 #endif
 }
 
-int InfiniTrainTest::DeviceCount() const { return core::GetDeviceGuardImpl(GetDevice().type())->DeviceCount(); }
+int InfiniTrainTest::DeviceCount() const {
+  return core::GetDeviceGuardImpl(GetDevice().type())->DeviceCount();
+}
 
-bool InfiniTrainTest::IsAccelerator() const { return GetDevice().type() != Device::DeviceType::kCPU; }
+bool InfiniTrainTest::IsAccelerator() const {
+  return GetDevice().type() != Device::DeviceType::kCPU;
+}
 
-} // namespace infini_train::test
+}  // namespace infini_train::test

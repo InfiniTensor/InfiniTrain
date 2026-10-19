@@ -11,45 +11,45 @@
 namespace infini_train {
 
 class Device {
-public:
-    enum class DeviceType : int8_t {
-        kCPU = 0,
-        kCUDA = 1,
-        kPrivateUse1 = 2,
-        kCount = 3,
-        kInvalid = -1,
-    };
+ public:
+  enum class DeviceType : int8_t {
+    kCPU = 0,
+    kCUDA = 1,
+    kPrivateUse1 = 2,
+    kCount = 3,
+    kInvalid = -1,
+  };
 
-    Device();
+  Device();
 
-    Device(DeviceType type, int8_t index);
+  Device(DeviceType type, int8_t index);
 
-    Device &operator=(const Device &) = default;
+  Device &operator=(const Device &) = default;
 
-    ~Device() = default;
+  ~Device() = default;
 
-    DeviceType type() const;
-    int8_t index() const;
+  DeviceType type() const;
+  int8_t index() const;
 
-    bool IsCPU() const;
-    bool IsCUDA() const;
-    bool IsPrivateUse1() const;
+  bool IsCPU() const;
+  bool IsCUDA() const;
+  bool IsPrivateUse1() const;
 
-    static std::optional<DeviceType> ParseType(std::string_view name);
+  static std::optional<DeviceType> ParseType(std::string_view name);
 
-    std::string ToString() const;
+  std::string ToString() const;
 
-    virtual nn::parallel::Rank Rank() const;
+  virtual nn::parallel::Rank Rank() const;
 
-    friend std::ostream &operator<<(std::ostream &os, const Device &device);
+  friend std::ostream &operator<<(std::ostream &os, const Device &device);
 
-    friend bool operator==(const Device &a, const Device &b);
+  friend bool operator==(const Device &a, const Device &b);
 
-    friend bool operator!=(const Device &a, const Device &b);
+  friend bool operator!=(const Device &a, const Device &b);
 
-private:
-    DeviceType type_ = DeviceType::kInvalid;
-    int8_t index_ = -1;
+ private:
+  DeviceType type_ = DeviceType::kInvalid;
+  int8_t index_ = -1;
 };
 
-} // namespace infini_train
+}  // namespace infini_train

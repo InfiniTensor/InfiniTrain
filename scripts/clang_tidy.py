@@ -247,9 +247,7 @@ def write_full_scan_reports(output: str, report_dir: Path) -> tuple[Path, Path]:
         f"Unique diagnostics: {len(diagnostics)}; raw diagnostics: {total}; "
         f"duplicates removed: {duplicate_count}."
     )
-    unique_path.write_text(
-        "\n".join([summary, *diagnostics, ""]), encoding="utf-8"
-    )
+    unique_path.write_text("\n".join([summary, *diagnostics, ""]), encoding="utf-8")
     print(summary)
     for diagnostic in diagnostics:
         print(diagnostic)
@@ -293,7 +291,8 @@ def run_changed(args: argparse.Namespace, clang_tidy: str) -> int:
 
 def run_all(args: argparse.Namespace) -> int:
     runner = find_tool(
-        args.run_clang_tidy, ["run-clang-tidy-18", "run-clang-tidy.py", "run-clang-tidy"]
+        args.run_clang_tidy,
+        ["run-clang-tidy-18", "run-clang-tidy.py", "run-clang-tidy"],
     )
     if runner is None:
         print("error: run-clang-tidy is required for --all", file=sys.stderr)
@@ -342,9 +341,7 @@ def main() -> int:
         type=Path,
         help="full-scan report directory (default: BUILD_DIR/clang-tidy-report)",
     )
-    parser.add_argument(
-        "--jobs", type=int, default=min(4, max(1, os.cpu_count() or 1))
-    )
+    parser.add_argument("--jobs", type=int, default=min(4, max(1, os.cpu_count() or 1)))
     parser.add_argument("--clang-tidy")
     parser.add_argument("--clang-tidy-diff")
     parser.add_argument("--run-clang-tidy")
@@ -366,7 +363,9 @@ def main() -> int:
         return 2
 
     if args.load_plugin is None:
-        print("error: --load-plugin is required when running clang-tidy", file=sys.stderr)
+        print(
+            "error: --load-plugin is required when running clang-tidy", file=sys.stderr
+        )
         return 2
 
     args.build_dir = args.build_dir.resolve()

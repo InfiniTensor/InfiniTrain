@@ -11,14 +11,16 @@ from pathlib import Path
 from argparse import ArgumentParser
 from compare_utils import collect_log_files, exit_if_duplicate_logs
 
+
 def get_dtype_from_filename(filename):
     """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
-    bf16_suffix = re.search(r'_(?:bfloat16|bf16)(?:_|\.|$)', filename)
-    return 'bfloat16' if bf16_suffix else 'fp32'
+    bf16_suffix = re.search(r"_(?:bfloat16|bf16)(?:_|\.|$)", filename)
+    return "bfloat16" if bf16_suffix else "fp32"
+
 
 def parse_log(file_path):
     """Extract step -> loss mapping from log file."""
-    pattern = re.compile(r'step\s+(\d+)/\d+\s+\|\s+train loss\s+([\d.]+)')
+    pattern = re.compile(r"step\s+(\d+)/\d+\s+\|\s+train loss\s+([\d.]+)")
     losses = {}
     with open(file_path) as f:
         for line in f:
@@ -26,6 +28,7 @@ def parse_log(file_path):
             if match:
                 losses[int(match.group(1))] = float(match.group(2))
     return losses
+
 
 def compare_files(file1, file2, threshold):
     """Compare loss values from two log files."""
@@ -44,19 +47,46 @@ def compare_files(file1, file2, threshold):
             loss1, loss2 = losses1[step], losses2[step]
             diff = abs(loss1 - loss2)
             if diff > threshold:
-                rel = diff / max(abs(loss1), abs(loss2)) * 100 if max(abs(loss1), abs(loss2)) > 0 else 0
-                mismatches.append(f"  Step {step}: {loss1:.6f} vs {loss2:.6f} ✗ (diff: {diff:.2e}, {rel:.4f}%)")
+                rel = (
+                    diff / max(abs(loss1), abs(loss2)) * 100
+                    if max(abs(loss1), abs(loss2)) > 0
+                    else 0
+                )
+                mismatches.append(
+                    f"  Step {step}: {loss1:.6f} vs {loss2:.6f} ✗ (diff: {diff:.2e}, {rel:.4f}%)"
+                )
 
     return len(all_steps), len(mismatches), mismatches
 
+
 def main():
-    parser = ArgumentParser(description='Compare training loss between two log directories')
-    parser.add_argument('dir1', type=Path, help='Baseline log directory')
-    parser.add_argument('dir2', type=Path, help='Test log directory')
-    parser.add_argument('--threshold', type=float, help='Loss difference threshold (deprecated, use --threshold-fp32 and --threshold-bf16)')
-    parser.add_argument('--threshold-fp32', type=float, default=1e-5, help='Loss difference threshold for fp32 (default: 1e-5)')
-    parser.add_argument('--threshold-bf16', type=float, default=1e-2, help='Loss difference threshold for bfloat16 (default: 1e-2)')
-    parser.add_argument('--verbose', action='store_true', help='Print detailed output for all files, including passed ones')
+    parser = ArgumentParser(
+        description="Compare training loss between two log directories"
+    )
+    parser.add_argument("dir1", type=Path, help="Baseline log directory")
+    parser.add_argument("dir2", type=Path, help="Test log directory")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        help="Loss difference threshold (deprecated, use --threshold-fp32 and --threshold-bf16)",
+    )
+    parser.add_argument(
+        "--threshold-fp32",
+        type=float,
+        default=1e-5,
+        help="Loss difference threshold for fp32 (default: 1e-5)",
+    )
+    parser.add_argument(
+        "--threshold-bf16",
+        type=float,
+        default=1e-2,
+        help="Loss difference threshold for bfloat16 (default: 1e-2)",
+    )
+    parser.add_argument(
+        "--verbose",
+        action="store_true",
+        help="Print detailed output for all files, including passed ones",
+    )
     args = parser.parse_args()
 
     # Support legacy --threshold argument
@@ -92,14 +122,16 @@ def main():
 
     for name in sorted(common):
         dtype = get_dtype_from_filename(name)
-        threshold = args.threshold_bf16 if dtype == 'bfloat16' else args.threshold_fp32
+        threshold = args.threshold_bf16 if dtype == "bfloat16" else args.threshold_fp32
 
-        if dtype == 'bfloat16':
+        if dtype == "bfloat16":
             bf16_total += 1
         else:
             fp32_total += 1
 
-        total_steps, num_mismatches, mismatches = compare_files(files1[name], files2[name], threshold)
+        total_steps, num_mismatches, mismatches = compare_files(
+            files1[name], files2[name], threshold
+        )
 
         if mismatches:
             print(f"Comparing {name} ({dtype}, threshold: {threshold:.0e}):")
@@ -107,7 +139,7 @@ def main():
                 print(msg)
             total_mismatches += num_mismatches
         else:
-            if dtype == 'bfloat16':
+            if dtype == "bfloat16":
                 bf16_passed += 1
             else:
                 fp32_passed += 1
@@ -121,12 +153,19 @@ def main():
 
     print("=" * 50)
     print(f"Overall Summary:")
-    print(f"  fp32:    {fp32_passed}/{fp32_total} test cases passed (threshold: {args.threshold_fp32:.0e})")
-    print(f"  bfloat16: {bf16_passed}/{bf16_total} test cases passed (threshold: {args.threshold_bf16:.0e})")
-    print(f"  Total:   {fp32_passed + bf16_passed}/{fp32_total + bf16_total} test cases passed")
+    print(
+        f"  fp32:    {fp32_passed}/{fp32_total} test cases passed (threshold: {args.threshold_fp32:.0e})"
+    )
+    print(
+        f"  bfloat16: {bf16_passed}/{bf16_total} test cases passed (threshold: {args.threshold_bf16:.0e})"
+    )
+    print(
+        f"  Total:   {fp32_passed + bf16_passed}/{fp32_total + bf16_total} test cases passed"
+    )
     print("=" * 50)
 
     sys.exit(1 if total_mismatches > 0 else 0)
 
-if __name__ == '__main__':
+
+if __name__ == "__main__":
     main()

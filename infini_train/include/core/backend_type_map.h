@@ -17,8 +17,8 @@ namespace infini_train::core {
  *                        call INFINI_REGISTER_STANDARD_BACKEND_TYPES(Dev)
  *                        once at file scope in the backend's dispatch header.
  *                    - Low-precision types (FP16, BF16):
- *                        directly specialize BackendTypeMap<Dev, kFLOAT16/kBFLOAT16>
- *                        in the backend's dispatch header (the native scalar type
+ *                        directly specialize BackendTypeMap<Dev,
+ * kFLOAT16/kBFLOAT16> in the backend's dispatch header (the native scalar type
  *                        differs per backend, e.g. __half on CUDA).
  *
  * If a backend does not register a dtype, HasMappedType_v returns false and
@@ -29,9 +29,10 @@ namespace infini_train::core {
 // BackendTypeMap: DataType -> backend dispatch type
 // Primary template intentionally undefined — no TypeMap<DType> fallback.
 // -----------------------------------------------------------------------------
-template <Device::DeviceType Dev, DataType DType> struct BackendTypeMap;
+template <Device::DeviceType Dev, DataType DType>
+struct BackendTypeMap;
 
-} // namespace infini_train::core
+}  // namespace infini_train::core
 
 // -----------------------------------------------------------------------------
 // INFINI_REGISTER_STANDARD_BACKEND_TYPES(DEV)
@@ -46,39 +47,50 @@ template <Device::DeviceType Dev, DataType DType> struct BackendTypeMap;
 // BackendTypeMap<DEV, kFLOAT16/kBFLOAT16> directly with their native scalar
 // type (e.g. __half / __nv_bfloat16 on CUDA).
 // -----------------------------------------------------------------------------
-#define INFINI_REGISTER_STANDARD_BACKEND_TYPES(DEV)                                                                    \
-    namespace infini_train::core {                                                                                     \
-    template <> struct BackendTypeMap<DEV, DataType::kBOOL> {                                                          \
-        using type = bool;                                                                                             \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kUINT8> {                                                         \
-        using type = uint8_t;                                                                                          \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kINT8> {                                                          \
-        using type = int8_t;                                                                                           \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kUINT16> {                                                        \
-        using type = uint16_t;                                                                                         \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kINT16> {                                                         \
-        using type = int16_t;                                                                                          \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kUINT32> {                                                        \
-        using type = uint32_t;                                                                                         \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kINT32> {                                                         \
-        using type = int32_t;                                                                                          \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kUINT64> {                                                        \
-        using type = uint64_t;                                                                                         \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kINT64> {                                                         \
-        using type = int64_t;                                                                                          \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kFLOAT32> {                                                       \
-        using type = float;                                                                                            \
-    };                                                                                                                 \
-    template <> struct BackendTypeMap<DEV, DataType::kFLOAT64> {                                                       \
-        using type = double;                                                                                           \
-    };                                                                                                                 \
-    } /* namespace infini_train::core */
+#define INFINI_REGISTER_STANDARD_BACKEND_TYPES(DEV) \
+  namespace infini_train::core {                    \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kBOOL> {     \
+    using type = bool;                              \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kUINT8> {    \
+    using type = uint8_t;                           \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kINT8> {     \
+    using type = int8_t;                            \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kUINT16> {   \
+    using type = uint16_t;                          \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kINT16> {    \
+    using type = int16_t;                           \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kUINT32> {   \
+    using type = uint32_t;                          \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kINT32> {    \
+    using type = int32_t;                           \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kUINT64> {   \
+    using type = uint64_t;                          \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kINT64> {    \
+    using type = int64_t;                           \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kFLOAT32> {  \
+    using type = float;                             \
+  };                                                \
+  template <>                                       \
+  struct BackendTypeMap<DEV, DataType::kFLOAT64> {  \
+    using type = double;                            \
+  };                                                \
+  } /* namespace infini_train::core */

@@ -8,10 +8,11 @@
 
 namespace infini_train::nn {
 class CrossEntropyLoss : public CloneableModule<CrossEntropyLoss> {
-public:
-    static constexpr char kType[] = "CrossEntropyLoss";
-    CrossEntropyLoss() : CloneableModule(kType) {}
+ public:
+  static constexpr char kType[] = "CrossEntropyLoss";
+  CrossEntropyLoss() : CloneableModule(kType) {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 };
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

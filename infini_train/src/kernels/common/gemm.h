@@ -6,8 +6,8 @@
 namespace infini_train::kernels {
 
 enum class GemmTranspose : int {
-    kNoTranspose = 0,
-    kTranspose = 1,
+  kNoTranspose = 0,
+  kTranspose = 1,
 };
 
 /**
@@ -19,30 +19,30 @@ enum class GemmTranspose : int {
  * be left at 0.
  */
 struct GemmParams {
-    GemmTranspose trans_a = GemmTranspose::kNoTranspose;
-    GemmTranspose trans_b = GemmTranspose::kNoTranspose;
+  GemmTranspose trans_a = GemmTranspose::kNoTranspose;
+  GemmTranspose trans_b = GemmTranspose::kNoTranspose;
 
-    int m = 0; // rows of op(A) and C
-    int n = 0; // cols of op(B) and C
-    int k = 0; // cols of op(A) == rows of op(B)
+  int m = 0;  // rows of op(A) and C
+  int n = 0;  // cols of op(B) and C
+  int k = 0;  // cols of op(A) == rows of op(B)
 
-    const void *A = nullptr;
-    int lda = 0;
-    const void *B = nullptr;
-    int ldb = 0;
-    void *C = nullptr;
-    int ldc = 0;
+  const void *A = nullptr;
+  int lda = 0;
+  const void *B = nullptr;
+  int ldb = 0;
+  void *C = nullptr;
+  int ldc = 0;
 
-    float alpha = 1.0f;
-    float beta = 0.0f;
+  float alpha = 1.0f;
+  float beta = 0.0f;
 
-    int batch_count = 1;
-    long long stride_a = 0;
-    long long stride_b = 0;
-    long long stride_c = 0;
+  int batch_count = 1;
+  long long stride_a = 0;
+  long long stride_b = 0;
+  long long stride_c = 0;
 
-    DataType input_dtype;
-    DataType output_dtype;
+  DataType input_dtype;
+  DataType output_dtype;
 };
 
-} // namespace infini_train::kernels
+}  // namespace infini_train::kernels

@@ -4,11 +4,11 @@
 
 namespace infini_train::nn::parallel::comm {
 enum class ReduceOpType : int8_t {
-    kSum,
-    kProd,
-    kMin,
-    kMax,
-    kAvg,
+  kSum,
+  kProd,
+  kMin,
+  kMax,
+  kAvg,
 };
 
-} // namespace infini_train::nn::parallel::comm
+}  // namespace infini_train::nn::parallel::comm

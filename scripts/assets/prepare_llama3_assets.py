@@ -39,19 +39,23 @@ allow_patterns = [
     "*.model",
 ]
 if not skip_weights:
-    allow_patterns.extend([
-        "model.safetensors",
-        "model-*.safetensors",
-        "model.safetensors.index.json",
-    ])
+    allow_patterns.extend(
+        [
+            "model.safetensors",
+            "model-*.safetensors",
+            "model.safetensors.index.json",
+        ]
+    )
 
 print(f"[llama3] downloading/reusing Hugging Face files for {MODEL_ID}")
-model_dir = Path(snapshot_download(
-    repo_id=MODEL_ID,
-    token=token,
-    cache_dir=str(cache_dir),
-    allow_patterns=allow_patterns,
-))
+model_dir = Path(
+    snapshot_download(
+        repo_id=MODEL_ID,
+        token=token,
+        cache_dir=str(cache_dir),
+        allow_patterns=allow_patterns,
+    )
+)
 
 # ---------------------------------------------------------------------------
 # TinyShakespeare -> InfiniTrain / llm.c LLaMA-3 data format
@@ -61,6 +65,7 @@ model_dir = Path(snapshot_download(
 #   [2] ntokens
 # payload: uint32 token ids
 # ---------------------------------------------------------------------------
+
 
 def write_datafile(path: Path, toks):
     if path.exists() and path.stat().st_size > 0 and not force:
@@ -80,6 +85,7 @@ def write_datafile(path: Path, toks):
     tmp.replace(path)
     print(f"[llama3] wrote {len(toks):,} tokens -> {path}")
 
+
 tokenizer = AutoTokenizer.from_pretrained(
     model_dir,
     local_files_only=True,
@@ -97,6 +103,7 @@ if bos is None:
         raise RuntimeError("could not determine LLaMA3 BOS token")
     bos = probe[0]
 
+
 def encode_no_special(s: str):
     # Match llm.c's tinyshakespeare.py behavior as closely as current
     # transformers versions permit.
@@ -109,6 +116,7 @@ def encode_no_special(s: str):
         )
     except TypeError:
         return tokenizer.encode(s, add_special_tokens=False)
+
 
 tokens = []
 for i, section in enumerate(sections):
@@ -198,6 +206,7 @@ if index_path.exists():
 else:
     weight_map = {}
 
+
 class SafeTensorShard:
     _dtype_map = {
         "F32": np.dtype("<f4"),
@@ -227,24 +236,30 @@ class SafeTensorShard:
         dtype = self._dtype_map[dtype_name]
         begin, end = meta["data_offsets"]
         shape = tuple(meta["shape"])
-        return np.ndarray(
-            shape=shape,
-            dtype=dtype,
-            buffer=self.mm,
-            offset=self.data_base + begin,
-            order="C",
-        ), dtype_name
+        return (
+            np.ndarray(
+                shape=shape,
+                dtype=dtype,
+                buffer=self.mm,
+                offset=self.data_base + begin,
+                order="C",
+            ),
+            dtype_name,
+        )
 
     def close(self):
         self.mm.close()
         self.fp.close()
 
+
 readers = {}
+
 
 def reader_for_file(filename: str):
     if filename not in readers:
         readers[filename] = SafeTensorShard(model_dir / filename)
     return readers[filename]
+
 
 if not weight_map:
     for sf in sorted(model_dir.glob("*.safetensors")):
@@ -253,25 +268,30 @@ if not weight_map:
             if key != "__metadata__":
                 weight_map[key] = sf.name
 
+
 def locate(key):
     if key not in weight_map:
         raise KeyError(f"tensor not found in HF checkpoint: {key}")
     return reader_for_file(weight_map[key])
+
 
 def bf16_to_f32(x):
     u32 = np.asarray(x, dtype=np.uint16).astype(np.uint32)
     u32 <<= 16
     return u32.view(np.float32)
 
+
 def as_f32(x, dtype_name):
     if dtype_name == "BF16":
         return bf16_to_f32(x)
     return np.asarray(x).astype(np.float32, copy=False)
 
+
 def get_full_f32(key):
     r = locate(key)
     arr, dtype_name = r.raw_array(key)
     return np.ascontiguousarray(as_f32(arr, dtype_name))
+
 
 def write_tensor_stream(out, key, chunk_rows=256):
     r = locate(key)
@@ -292,15 +312,17 @@ def write_tensor_stream(out, key, chunk_rows=256):
         chunk = np.ascontiguousarray(as_f32(arr[start:end], dtype_name), dtype="<f4")
         out.write(chunk.tobytes(order="C"))
 
+
 def unpermute(w, n_heads):
     dim1, dim2 = w.shape
     if dim1 % (n_heads * 2) != 0:
         raise RuntimeError(f"cannot unpermute shape={w.shape}, n_heads={n_heads}")
     return (
         w.reshape(n_heads, 2, dim1 // n_heads // 2, dim2)
-         .transpose(0, 2, 1, 3)
-         .reshape(dim1, dim2)
+        .transpose(0, 2, 1, 3)
+        .reshape(dim1, dim2)
     )
+
 
 def pack_header():
     h = bytearray(256 * 4)
@@ -321,6 +343,7 @@ def pack_header():
     struct.pack_into("<i", h, 56, 3)
     struct.pack_into("<i", h, 60, 2)
     return h
+
 
 tmp = weight_out.with_suffix(weight_out.suffix + ".part")
 print(

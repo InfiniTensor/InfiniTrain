@@ -6,54 +6,58 @@
 
 namespace infini_train::utils {
 struct PrecisionCheckConfig;
-} // namespace infini_train::utils
+}  // namespace infini_train::utils
 
 namespace infini_train {
 class Tensor;
 
 namespace autograd {
 class Function;
-} // namespace autograd
+}  // namespace autograd
 
 namespace nn {
 class Module;
-} // namespace nn
+}  // namespace nn
 
 namespace utils {
 
 class PrecisionChecker {
-public:
-    struct Config {
-        bool check_nan = true;
-        bool check_inf = true;
-        bool print_stats = true;
-        bool abort_on_error = false;
-    };
+ public:
+  struct Config {
+    bool check_nan = true;
+    bool check_inf = true;
+    bool print_stats = true;
+    bool abort_on_error = false;
+  };
 
-    static const Config &DefaultConfig();
+  static const Config &DefaultConfig();
 
-    // Initialize global module-level precision checking
-    // Called automatically by PrecisionCheckEnv::Init when level >= MODULE
-    static void Init(const PrecisionCheckConfig &global_config, const Config &config = DefaultConfig());
+  // Initialize global module-level precision checking
+  // Called automatically by PrecisionCheckEnv::Init when level >= MODULE
+  static void Init(const PrecisionCheckConfig &global_config,
+                   const Config &config = DefaultConfig());
 
-    // Build name map from root_model without registering hooks
-    // Called by PrecisionCheckEnv::RegisterWithRootModel
-    static void BuildNameMap(nn::Module *root_model);
+  // Build name map from root_model without registering hooks
+  // Called by PrecisionCheckEnv::RegisterWithRootModel
+  static void BuildNameMap(nn::Module *root_model);
 
-    static void RegisterForFunction(autograd::Function *func, const std::string &name = "",
-                                    const Config &config = DefaultConfig());
-
-    // Register hooks for a Module (checks forward inputs/outputs)
-    static void RegisterForModule(nn::Module *module, const std::string &name = "",
+  static void RegisterForFunction(autograd::Function *func,
+                                  const std::string &name = "",
                                   const Config &config = DefaultConfig());
 
-    // Reset tensor counters (call at start of each iteration for file overwrite)
-    static void ResetCounters();
+  // Register hooks for a Module (checks forward inputs/outputs)
+  static void RegisterForModule(nn::Module *module,
+                                const std::string &name = "",
+                                const Config &config = DefaultConfig());
 
-private:
-    static void CheckTensors(const std::string &stage, const std::string &name,
-                             const std::vector<std::shared_ptr<Tensor>> &tensors, const Config &config);
+  // Reset tensor counters (call at start of each iteration for file overwrite)
+  static void ResetCounters();
+
+ private:
+  static void CheckTensors(const std::string &stage, const std::string &name,
+                           const std::vector<std::shared_ptr<Tensor>> &tensors,
+                           const Config &config);
 };
 
-} // namespace utils
-} // namespace infini_train
+}  // namespace utils
+}  // namespace infini_train

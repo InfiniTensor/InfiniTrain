@@ -36,860 +36,989 @@ namespace infini_train::nn::lora {
 namespace {
 
 enum class LoRATensorSharding {
-    // The tensor is identical on every TP rank, so save/load can copy it as-is.
-    kReplicated,
-    // LoRA-B for a ColumnParallelLinear: local shape is [out/tp, rank].
-    kColumnParallelDim0,
-    // Attention QKV LoRA-B: dim0-sharded like ColumnParallel, but each local
-    // shard is packed as [Qi | Ki | Vi] instead of a simple contiguous slice.
-    kPackedQKVColumnParallelDim0,
-    // SwiGLU FC1 LoRA-B: dim0-sharded like ColumnParallel, but each local
-    // shard is packed as [gate_i | up_i] instead of a simple contiguous slice.
-    kPackedSwiGLUColumnParallelDim0,
-    // LoRA-A for a RowParallelLinear: local shape is [rank, in/tp].
-    kRowParallelDim1,
+  // The tensor is identical on every TP rank, so save/load can copy it as-is.
+  kReplicated,
+  // LoRA-B for a ColumnParallelLinear: local shape is [out/tp, rank].
+  kColumnParallelDim0,
+  // Attention QKV LoRA-B: dim0-sharded like ColumnParallel, but each local
+  // shard is packed as [Qi | Ki | Vi] instead of a simple contiguous slice.
+  kPackedQKVColumnParallelDim0,
+  // SwiGLU FC1 LoRA-B: dim0-sharded like ColumnParallel, but each local
+  // shard is packed as [gate_i | up_i] instead of a simple contiguous slice.
+  kPackedSwiGLUColumnParallelDim0,
+  // LoRA-A for a RowParallelLinear: local shape is [rank, in/tp].
+  kRowParallelDim1,
 };
 
 bool EndsWith(const std::string &value, const std::string &suffix) {
-    return value.size() >= suffix.size() && value.compare(value.size() - suffix.size(), suffix.size(), suffix) == 0;
+  return value.size() >= suffix.size() &&
+         value.compare(value.size() - suffix.size(), suffix.size(), suffix) ==
+             0;
 }
 
 std::string ConsumeDDPModulePrefixIfPresent(const std::string &name) {
-    const auto module_name_len = std::char_traits<char>::length(parallel::kModuleName);
-    if (name.size() > module_name_len && name.compare(0, module_name_len, parallel::kModuleName) == 0
-        && name[module_name_len] == '.') {
-        return name.substr(module_name_len + 1);
-    }
-    return name;
+  const auto module_name_len =
+      std::char_traits<char>::length(parallel::kModuleName);
+  if (name.size() > module_name_len &&
+      name.compare(0, module_name_len, parallel::kModuleName) == 0 &&
+      name[module_name_len] == '.') {
+    return name.substr(module_name_len + 1);
+  }
+  return name;
 }
 
-std::string ResolveLoRAStateDictKey(const std::string &name,
-                                    const std::unordered_map<std::string, std::shared_ptr<Tensor>> &model_state_dict) {
-    if (model_state_dict.find(name) != model_state_dict.end()) {
-        return name;
-    }
-
-    const auto unwrapped_name = ConsumeDDPModulePrefixIfPresent(name);
-    if (unwrapped_name != name && model_state_dict.find(unwrapped_name) != model_state_dict.end()) {
-        return unwrapped_name;
-    }
-
+std::string ResolveLoRAStateDictKey(
+    const std::string &name,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &model_state_dict) {
+  if (model_state_dict.find(name) != model_state_dict.end()) {
     return name;
+  }
+
+  const auto unwrapped_name = ConsumeDDPModulePrefixIfPresent(name);
+  if (unwrapped_name != name &&
+      model_state_dict.find(unwrapped_name) != model_state_dict.end()) {
+    return unwrapped_name;
+  }
+
+  return name;
 }
 
-std::shared_ptr<Module> UnwrapDistributedDataParallel(const std::shared_ptr<Module> &model) {
-    auto ddp_model = std::dynamic_pointer_cast<parallel::DistributedDataParallel>(model);
-    return ddp_model ? ddp_model->module() : model;
+std::shared_ptr<Module> UnwrapDistributedDataParallel(
+    const std::shared_ptr<Module> &model) {
+  auto ddp_model =
+      std::dynamic_pointer_cast<parallel::DistributedDataParallel>(model);
+  return ddp_model ? ddp_model->module() : model;
 }
 
 std::string LoraANameForLoraB(const std::string &name) {
-    const std::string lora_b = LoRAColumnParallelLinear::kParamLoraBName;
-    CHECK(EndsWith(name, lora_b)) << "Expected LoRA B parameter name, got " << name;
-    return name.substr(0, name.size() - lora_b.size()) + LoRAColumnParallelLinear::kParamLoraAName;
+  const std::string lora_b = LoRAColumnParallelLinear::kParamLoraBName;
+  CHECK(EndsWith(name, lora_b))
+      << "Expected LoRA B parameter name, got " << name;
+  return name.substr(0, name.size() - lora_b.size()) +
+         LoRAColumnParallelLinear::kParamLoraAName;
 }
 
-std::string QualifiedParamName(const std::string &module_name, const std::string &param_name) {
-    return module_name.empty() ? param_name : module_name + "." + param_name;
+std::string QualifiedParamName(const std::string &module_name,
+                               const std::string &param_name) {
+  return module_name.empty() ? param_name : module_name + "." + param_name;
 }
 
-void MarkLoRAColumnParallelBSharding(const std::string &module_name, const std::shared_ptr<Module> &module,
-                                     const std::string &projection_name, LoRATensorSharding sharding,
-                                     std::unordered_map<std::string, LoRATensorSharding> &shardings) {
-    auto projection = module->mutable_module(projection_name);
-    if (!dynamic_cast<LoRAColumnParallelLinear *>(projection.get())) {
-        return;
+void MarkLoRAColumnParallelBSharding(
+    const std::string &module_name, const std::shared_ptr<Module> &module,
+    const std::string &projection_name, LoRATensorSharding sharding,
+    std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+  auto projection = module->mutable_module(projection_name);
+  if (!dynamic_cast<LoRAColumnParallelLinear *>(projection.get())) {
+    return;
+  }
+
+  const auto projection_module_name =
+      QualifiedParamName(module_name, projection_name);
+  shardings[QualifiedParamName(projection_module_name,
+                               LoRAColumnParallelLinear::kParamLoraBName)] =
+      sharding;
+}
+
+void MarkPackedQKVLoRASharding(
+    const std::string &module_name, const std::shared_ptr<Module> &module,
+    std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+  MarkLoRAColumnParallelBSharding(
+      module_name, module, CausalSelfAttention::kCAttnLayerName,
+      LoRATensorSharding::kPackedQKVColumnParallelDim0, shardings);
+}
+
+void MarkPackedSwiGLULoRASharding(
+    const std::string &module_name, const std::shared_ptr<Module> &module,
+    std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+  bool is_swiglu = false;
+  for (const auto &child : module->modules()) {
+    if (dynamic_cast<SwiGLU *>(child.get())) {
+      is_swiglu = true;
+      break;
     }
+  }
+  if (!is_swiglu) {
+    return;
+  }
 
-    const auto projection_module_name = QualifiedParamName(module_name, projection_name);
-    shardings[QualifiedParamName(projection_module_name, LoRAColumnParallelLinear::kParamLoraBName)] = sharding;
+  MarkLoRAColumnParallelBSharding(
+      module_name, module, MLP::kCFcLayerName,
+      LoRATensorSharding::kPackedSwiGLUColumnParallelDim0, shardings);
 }
 
-void MarkPackedQKVLoRASharding(const std::string &module_name, const std::shared_ptr<Module> &module,
-                               std::unordered_map<std::string, LoRATensorSharding> &shardings) {
-    MarkLoRAColumnParallelBSharding(module_name, module, CausalSelfAttention::kCAttnLayerName,
-                                    LoRATensorSharding::kPackedQKVColumnParallelDim0, shardings);
+std::vector<std::string> SortedLoRAStateDictNames(
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &state_dict) {
+  std::vector<std::string> names;
+  names.reserve(state_dict.size());
+  for (const auto &[name, _] : state_dict) {
+    names.push_back(name);
+  }
+  std::sort(names.begin(), names.end());
+  return names;
 }
 
-void MarkPackedSwiGLULoRASharding(const std::string &module_name, const std::shared_ptr<Module> &module,
-                                  std::unordered_map<std::string, LoRATensorSharding> &shardings) {
-    bool is_swiglu = false;
-    for (const auto &child : module->modules()) {
-        if (dynamic_cast<SwiGLU *>(child.get())) {
-            is_swiglu = true;
-            break;
-        }
+std::unordered_map<std::string, LoRATensorSharding> BuildLoRATensorShardings(
+    const std::shared_ptr<Module> &model) {
+  std::unordered_map<std::string, LoRATensorSharding> shardings;
+
+  // Sharding metadata is keyed by the same qualified parameter names used by
+  // LoRAStateDict(), so save can decide whether a local tensor must be
+  // gathered.
+  auto named_modules = model->NamedModules(/*memory=*/nullptr, /*prefix=*/"",
+                                           /*remove_duplicate=*/false);
+  for (const auto &[module_name, module] : named_modules) {
+    if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+      shardings[QualifiedParamName(module_name,
+                                   LoRAColumnParallelLinear::kParamLoraAName)] =
+          LoRATensorSharding::kReplicated;
+      shardings[QualifiedParamName(module_name,
+                                   LoRAColumnParallelLinear::kParamLoraBName)] =
+          LoRATensorSharding::kColumnParallelDim0;
+    } else if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+      shardings[QualifiedParamName(module_name,
+                                   LoRARowParallelLinear::kParamLoraAName)] =
+          LoRATensorSharding::kRowParallelDim1;
+      shardings[QualifiedParamName(module_name,
+                                   LoRARowParallelLinear::kParamLoraBName)] =
+          LoRATensorSharding::kReplicated;
+    } else if (dynamic_cast<LoRALinear *>(module.get())) {
+      shardings[QualifiedParamName(module_name, LoRALinear::kParamLoraAName)] =
+          LoRATensorSharding::kReplicated;
+      shardings[QualifiedParamName(module_name, LoRALinear::kParamLoraBName)] =
+          LoRATensorSharding::kReplicated;
     }
-    if (!is_swiglu) {
-        return;
-    }
+  }
 
-    MarkLoRAColumnParallelBSharding(module_name, module, MLP::kCFcLayerName,
-                                    LoRATensorSharding::kPackedSwiGLUColumnParallelDim0, shardings);
+  // Packed projections are properties of their parent module topology, not
+  // only their parameter names.
+  for (const auto &[module_name, module] : named_modules) {
+    if (dynamic_cast<CausalSelfAttention *>(module.get())) {
+      MarkPackedQKVLoRASharding(module_name, module, shardings);
+    } else if (dynamic_cast<MLP *>(module.get())) {
+      MarkPackedSwiGLULoRASharding(module_name, module, shardings);
+    }
+  }
+
+  return shardings;
 }
 
-std::vector<std::string>
-SortedLoRAStateDictNames(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
-    std::vector<std::string> names;
-    names.reserve(state_dict.size());
-    for (const auto &[name, _] : state_dict) { names.push_back(name); }
-    std::sort(names.begin(), names.end());
-    return names;
-}
-
-std::unordered_map<std::string, LoRATensorSharding> BuildLoRATensorShardings(const std::shared_ptr<Module> &model) {
-    std::unordered_map<std::string, LoRATensorSharding> shardings;
-
-    // Sharding metadata is keyed by the same qualified parameter names used by
-    // LoRAStateDict(), so save can decide whether a local tensor must be gathered.
-    auto named_modules = model->NamedModules(/*memory=*/nullptr, /*prefix=*/"", /*remove_duplicate=*/false);
-    for (const auto &[module_name, module] : named_modules) {
-        if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
-            shardings[QualifiedParamName(module_name, LoRAColumnParallelLinear::kParamLoraAName)]
-                = LoRATensorSharding::kReplicated;
-            shardings[QualifiedParamName(module_name, LoRAColumnParallelLinear::kParamLoraBName)]
-                = LoRATensorSharding::kColumnParallelDim0;
-        } else if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
-            shardings[QualifiedParamName(module_name, LoRARowParallelLinear::kParamLoraAName)]
-                = LoRATensorSharding::kRowParallelDim1;
-            shardings[QualifiedParamName(module_name, LoRARowParallelLinear::kParamLoraBName)]
-                = LoRATensorSharding::kReplicated;
-        } else if (dynamic_cast<LoRALinear *>(module.get())) {
-            shardings[QualifiedParamName(module_name, LoRALinear::kParamLoraAName)] = LoRATensorSharding::kReplicated;
-            shardings[QualifiedParamName(module_name, LoRALinear::kParamLoraBName)] = LoRATensorSharding::kReplicated;
-        }
-    }
-
-    // Packed projections are properties of their parent module topology, not
-    // only their parameter names.
-    for (const auto &[module_name, module] : named_modules) {
-        if (dynamic_cast<CausalSelfAttention *>(module.get())) {
-            MarkPackedQKVLoRASharding(module_name, module, shardings);
-        } else if (dynamic_cast<MLP *>(module.get())) {
-            MarkPackedSwiGLULoRASharding(module_name, module, shardings);
-        }
-    }
-
-    return shardings;
-}
-
-LoRATensorSharding GetLoRATensorSharding(const std::unordered_map<std::string, LoRATensorSharding> &shardings,
-                                         const std::string &name) {
-    auto it = shardings.find(name);
-    return it == shardings.end() ? LoRATensorSharding::kReplicated : it->second;
+LoRATensorSharding GetLoRATensorSharding(
+    const std::unordered_map<std::string, LoRATensorSharding> &shardings,
+    const std::string &name) {
+  auto it = shardings.find(name);
+  return it == shardings.end() ? LoRATensorSharding::kReplicated : it->second;
 }
 
 bool IsPrimarySaveTPGroupRank() {
-    const int global_rank = parallel::global::thread_global_rank;
-    int dp, tp, pp, ep;
-    parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep);
-    return dp == 0 && pp == 0;
+  const int global_rank = parallel::global::thread_global_rank;
+  int dp, tp, pp, ep;
+  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp,
+                                                    ep);
+  return dp == 0 && pp == 0;
 }
 
 bool IsSaveWriterRank() {
-    const int global_rank = parallel::global::thread_global_rank;
-    int dp, tp, pp, ep;
-    parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep);
-    return dp == 0 && tp == 0 && pp == 0;
+  const int global_rank = parallel::global::thread_global_rank;
+  int dp, tp, pp, ep;
+  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp,
+                                                    ep);
+  return dp == 0 && tp == 0 && pp == 0;
 }
 
-std::shared_ptr<Tensor>
-ExportLoRATensorForSave(const std::string &name, const std::shared_ptr<Tensor> &tensor,
-                        const std::unordered_map<std::string, std::shared_ptr<Tensor>> &local_state_dict,
-                        const std::unordered_map<std::string, LoRATensorSharding> &shardings) {
-    const auto sharding = GetLoRATensorSharding(shardings, name);
-    switch (sharding) {
+std::shared_ptr<Tensor> ExportLoRATensorForSave(
+    const std::string &name, const std::shared_ptr<Tensor> &tensor,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &local_state_dict,
+    const std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+  const auto sharding = GetLoRATensorSharding(shardings, name);
+  switch (sharding) {
     case LoRATensorSharding::kReplicated:
-        return tensor;
+      return tensor;
     case LoRATensorSharding::kPackedQKVColumnParallelDim0:
     case LoRATensorSharding::kPackedSwiGLUColumnParallelDim0:
-        // Packed projections are still dim0-sharded like ColumnParallel; they
-        // only need an extra component reorder after the common gather below.
+      // Packed projections are still dim0-sharded like ColumnParallel; they
+      // only need an extra component reorder after the common gather below.
     case LoRATensorSharding::kColumnParallelDim0: {
-        auto gathered = parallel::GatherTensorParallelShard(tensor, 0);
-        if (sharding == LoRATensorSharding::kColumnParallelDim0) {
-            return gathered;
-        }
+      auto gathered = parallel::GatherTensorParallelShard(tensor, 0);
+      if (sharding == LoRATensorSharding::kColumnParallelDim0) {
+        return gathered;
+      }
 
-        if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
-            // Local shards are gathered as [gate_0 | up_0 | gate_1 | up_1 | ...].
-            // Adapter files use the full packed order [all_gate | all_up].
-            return detail::RestorePackedSwiGLURowsFromTensorParallel(gathered,
-                                                                     parallel::global::GetTensorParallelSize());
-        }
+      if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
+        // Local shards are gathered as [gate_0 | up_0 | gate_1 | up_1 | ...].
+        // Adapter files use the full packed order [all_gate | all_up].
+        return detail::RestorePackedSwiGLURowsFromTensorParallel(
+            gathered, parallel::global::GetTensorParallelSize());
+      }
 
-        const auto lora_a_name = LoraANameForLoraB(name);
-        auto lora_a_it = local_state_dict.find(lora_a_name);
-        CHECK(lora_a_it != local_state_dict.end())
-            << "SaveLoRAWeights: cannot infer packed QKV shape without " << lora_a_name;
-        const auto &lora_a_dims = lora_a_it->second->Dims();
-        CHECK_EQ(lora_a_dims.size(), 2) << "SaveLoRAWeights: unexpected lora_A shape for " << lora_a_name;
-        // Packed QKV LoRA-B is stored locally as [Qi | Ki | Vi], but adapter files
-        // use the full packed order [Q | K | V] to match base QKV checkpoints.
-        return detail::RestorePackedQKVRowsFromTensorParallel(gathered, /*q_rows=*/lora_a_dims[1],
-                                                              parallel::global::GetTensorParallelSize());
+      const auto lora_a_name = LoraANameForLoraB(name);
+      auto lora_a_it = local_state_dict.find(lora_a_name);
+      CHECK(lora_a_it != local_state_dict.end())
+          << "SaveLoRAWeights: cannot infer packed QKV shape without "
+          << lora_a_name;
+      const auto &lora_a_dims = lora_a_it->second->Dims();
+      CHECK_EQ(lora_a_dims.size(), 2)
+          << "SaveLoRAWeights: unexpected lora_A shape for " << lora_a_name;
+      // Packed QKV LoRA-B is stored locally as [Qi | Ki | Vi], but adapter
+      // files use the full packed order [Q | K | V] to match base QKV
+      // checkpoints.
+      return detail::RestorePackedQKVRowsFromTensorParallel(
+          gathered, /*q_rows=*/lora_a_dims[1],
+          parallel::global::GetTensorParallelSize());
     }
     case LoRATensorSharding::kRowParallelDim1:
-        return parallel::GatherTensorParallelShard(tensor, 1);
-    }
-    LOG(FATAL) << "Unknown LoRA tensor sharding";
-    return tensor;
+      return parallel::GatherTensorParallelShard(tensor, 1);
+  }
+  LOG(FATAL) << "Unknown LoRA tensor sharding";
+  return tensor;
 }
 
-void LoadLoRATensorIntoModel(const std::string &name, const std::shared_ptr<Tensor> &src,
-                             const std::unordered_map<std::string, std::shared_ptr<Tensor>> &model_state_dict,
-                             const std::unordered_map<std::string, LoRATensorSharding> &shardings) {
-    auto it = model_state_dict.find(name);
-    if (it == model_state_dict.end()) {
-        LOG(WARNING) << "LoRA parameter not found in model: " << name;
-        return;
-    }
+void LoadLoRATensorIntoModel(
+    const std::string &name, const std::shared_ptr<Tensor> &src,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &model_state_dict,
+    const std::unordered_map<std::string, LoRATensorSharding> &shardings) {
+  auto it = model_state_dict.find(name);
+  if (it == model_state_dict.end()) {
+    LOG(WARNING) << "LoRA parameter not found in model: " << name;
+    return;
+  }
 
-    auto &dst = it->second;
-    const auto &src_dims = src->Dims();
-    const auto &dst_dims = dst->Dims();
-    if (dst_dims == src_dims) {
-        dst->CopyFrom(src);
-        return;
-    }
+  auto &dst = it->second;
+  const auto &src_dims = src->Dims();
+  const auto &dst_dims = dst->Dims();
+  if (dst_dims == src_dims) {
+    dst->CopyFrom(src);
+    return;
+  }
 
-    const int tp_size = parallel::global::GetTensorParallelSize();
-    const auto sharding = GetLoRATensorSharding(shardings, name);
-    if (sharding == LoRATensorSharding::kPackedQKVColumnParallelDim0) {
-        const auto lora_a_name = LoraANameForLoraB(name);
-        auto lora_a_it = model_state_dict.find(lora_a_name);
-        CHECK(lora_a_it != model_state_dict.end())
-            << "LoadLoRATensorIntoModel: cannot infer packed QKV shape without " << lora_a_name;
-        const auto &lora_a_dims = lora_a_it->second->Dims();
-        CHECK_EQ(lora_a_dims.size(), 2) << "LoadLoRATensorIntoModel: unexpected lora_A shape for " << lora_a_name;
+  const int tp_size = parallel::global::GetTensorParallelSize();
+  const auto sharding = GetLoRATensorSharding(shardings, name);
+  if (sharding == LoRATensorSharding::kPackedQKVColumnParallelDim0) {
+    const auto lora_a_name = LoraANameForLoraB(name);
+    auto lora_a_it = model_state_dict.find(lora_a_name);
+    CHECK(lora_a_it != model_state_dict.end())
+        << "LoadLoRATensorIntoModel: cannot infer packed QKV shape without "
+        << lora_a_name;
+    const auto &lora_a_dims = lora_a_it->second->Dims();
+    CHECK_EQ(lora_a_dims.size(), 2)
+        << "LoadLoRATensorIntoModel: unexpected lora_A shape for "
+        << lora_a_name;
 
-        // Full adapter files store packed QKV LoRA-B as [Q | K | V]. Each TP rank
-        // needs the matching local packed layout [Qi | Ki | Vi].
-        auto sliced
-            = detail::SlicePackedQKVRowsForTensorParallel(src, /*q_rows=*/lora_a_dims[1], parallel::tp_rank, tp_size);
-        CHECK(sliced->Dims() == dst_dims) << "LoadLoRATensorIntoModel: packed QKV shard shape mismatch for " << name;
-        dst->CopyFrom(sliced);
-        return;
-    }
-    if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
-        // Full adapter files store [all_gate | all_up]. Each TP rank needs its
-        // matching local packed layout [gate_i | up_i].
-        auto sliced = detail::SlicePackedSwiGLURowsForTensorParallel(src, parallel::tp_rank, tp_size);
-        CHECK(sliced->Dims() == dst_dims) << "LoadLoRATensorIntoModel: packed SwiGLU shard shape mismatch for " << name;
-        dst->CopyFrom(sliced);
-        return;
-    }
-
-    CHECK_EQ(src_dims.size(), dst_dims.size()) << "LoadLoRATensorIntoModel: rank mismatch for " << name;
-    int shard_dim = -1;
-    for (int d = 0; d < static_cast<int>(src_dims.size()); ++d) {
-        if (dst_dims[d] != src_dims[d]) {
-            shard_dim = d;
-            break;
-        }
-    }
-    CHECK(shard_dim >= 0) << "LoadLoRATensorIntoModel: shape mismatch for " << name << " but no differing dim found";
-    CHECK_EQ(src_dims[shard_dim] % tp_size, 0)
-        << "LoadLoRATensorIntoModel: sharded dimension is not divisible by TP size for " << name;
-
-    const int64_t shard_size = src_dims[shard_dim] / tp_size;
-    const int64_t start = static_cast<int64_t>(parallel::tp_rank) * shard_size;
-    auto sliced = src->Slice(shard_dim, start, start + shard_size);
-    CHECK(sliced->Dims() == dst_dims) << "LoadLoRATensorIntoModel: shard shape mismatch for " << name;
+    // Full adapter files store packed QKV LoRA-B as [Q | K | V]. Each TP rank
+    // needs the matching local packed layout [Qi | Ki | Vi].
+    auto sliced = detail::SlicePackedQKVRowsForTensorParallel(
+        src, /*q_rows=*/lora_a_dims[1], parallel::tp_rank, tp_size);
+    CHECK(sliced->Dims() == dst_dims)
+        << "LoadLoRATensorIntoModel: packed QKV shard shape mismatch for "
+        << name;
     dst->CopyFrom(sliced);
+    return;
+  }
+  if (sharding == LoRATensorSharding::kPackedSwiGLUColumnParallelDim0) {
+    // Full adapter files store [all_gate | all_up]. Each TP rank needs its
+    // matching local packed layout [gate_i | up_i].
+    auto sliced = detail::SlicePackedSwiGLURowsForTensorParallel(
+        src, parallel::tp_rank, tp_size);
+    CHECK(sliced->Dims() == dst_dims)
+        << "LoadLoRATensorIntoModel: packed SwiGLU shard shape mismatch for "
+        << name;
+    dst->CopyFrom(sliced);
+    return;
+  }
+
+  CHECK_EQ(src_dims.size(), dst_dims.size())
+      << "LoadLoRATensorIntoModel: rank mismatch for " << name;
+  int shard_dim = -1;
+  for (int d = 0; d < static_cast<int>(src_dims.size()); ++d) {
+    if (dst_dims[d] != src_dims[d]) {
+      shard_dim = d;
+      break;
+    }
+  }
+  CHECK(shard_dim >= 0) << "LoadLoRATensorIntoModel: shape mismatch for "
+                        << name << " but no differing dim found";
+  CHECK_EQ(src_dims[shard_dim] % tp_size, 0)
+      << "LoadLoRATensorIntoModel: sharded dimension is not divisible by TP "
+         "size for "
+      << name;
+
+  const int64_t shard_size = src_dims[shard_dim] / tp_size;
+  const int64_t start = static_cast<int64_t>(parallel::tp_rank) * shard_size;
+  auto sliced = src->Slice(shard_dim, start, start + shard_size);
+  CHECK(sliced->Dims() == dst_dims)
+      << "LoadLoRATensorIntoModel: shard shape mismatch for " << name;
+  dst->CopyFrom(sliced);
 }
 
-std::shared_ptr<Tensor> SlicePackedProjectionRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor,
-                                                                   const std::vector<int64_t> &projection_rows,
-                                                                   int tp_rank, int tp_size) {
-    CHECK(full_tensor != nullptr);
-    CHECK(!projection_rows.empty());
+std::shared_ptr<Tensor> SlicePackedProjectionRowsForTensorParallel(
+    const std::shared_ptr<Tensor> &full_tensor,
+    const std::vector<int64_t> &projection_rows, int tp_rank, int tp_size) {
+  CHECK(full_tensor != nullptr);
+  CHECK(!projection_rows.empty());
 
-    const auto &dims = full_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
-    CHECK_GT(tp_size, 0);
-    CHECK_GE(tp_rank, 0);
-    CHECK_LT(tp_rank, tp_size);
+  const auto &dims = full_tensor->Dims();
+  CHECK_GE(dims.size(), 1);
+  CHECK_GT(tp_size, 0);
+  CHECK_GE(tp_rank, 0);
+  CHECK_LT(tp_rank, tp_size);
 
-    int64_t total_rows = 0;
-    for (int64_t rows : projection_rows) {
-        CHECK_GT(rows, 0);
-        CHECK_EQ(rows % tp_size, 0) << "Packed projection rows must be divisible by TP size";
-        total_rows += rows;
-    }
-    CHECK_EQ(dims[0], total_rows) << "Packed projection row counts do not match tensor shape";
+  int64_t total_rows = 0;
+  for (int64_t rows : projection_rows) {
+    CHECK_GT(rows, 0);
+    CHECK_EQ(rows % tp_size, 0)
+        << "Packed projection rows must be divisible by TP size";
+    total_rows += rows;
+  }
+  CHECK_EQ(dims[0], total_rows)
+      << "Packed projection row counts do not match tensor shape";
 
-    std::vector<std::shared_ptr<Tensor>> shards;
-    shards.reserve(projection_rows.size());
-    int64_t offset = 0;
-    for (int64_t rows : projection_rows) {
-        const int64_t local_rows = rows / tp_size;
-        const int64_t start = offset + static_cast<int64_t>(tp_rank) * local_rows;
-        shards.push_back(full_tensor->Slice(0, start, start + local_rows));
-        offset += rows;
-    }
-    return nn::function::Concat(shards, 0);
+  std::vector<std::shared_ptr<Tensor>> shards;
+  shards.reserve(projection_rows.size());
+  int64_t offset = 0;
+  for (int64_t rows : projection_rows) {
+    const int64_t local_rows = rows / tp_size;
+    const int64_t start = offset + static_cast<int64_t>(tp_rank) * local_rows;
+    shards.push_back(full_tensor->Slice(0, start, start + local_rows));
+    offset += rows;
+  }
+  return nn::function::Concat(shards, 0);
 }
 
-std::shared_ptr<Tensor> RestorePackedProjectionRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
-                                                                      const std::vector<int64_t> &local_projection_rows,
-                                                                      int tp_size) {
-    CHECK(gathered_tensor != nullptr);
-    CHECK(!local_projection_rows.empty());
+std::shared_ptr<Tensor> RestorePackedProjectionRowsFromTensorParallel(
+    const std::shared_ptr<Tensor> &gathered_tensor,
+    const std::vector<int64_t> &local_projection_rows, int tp_size) {
+  CHECK(gathered_tensor != nullptr);
+  CHECK(!local_projection_rows.empty());
 
-    const auto &dims = gathered_tensor->Dims();
-    CHECK_GE(dims.size(), 1);
-    CHECK_GT(tp_size, 0);
-    CHECK_EQ(dims[0] % tp_size, 0) << "Gathered packed projection rows must be divisible by TP size";
+  const auto &dims = gathered_tensor->Dims();
+  CHECK_GE(dims.size(), 1);
+  CHECK_GT(tp_size, 0);
+  CHECK_EQ(dims[0] % tp_size, 0)
+      << "Gathered packed projection rows must be divisible by TP size";
 
-    int64_t rows_per_rank = 0;
-    for (int64_t rows : local_projection_rows) {
-        CHECK_GT(rows, 0);
-        rows_per_rank += rows;
+  int64_t rows_per_rank = 0;
+  for (int64_t rows : local_projection_rows) {
+    CHECK_GT(rows, 0);
+    rows_per_rank += rows;
+  }
+  CHECK_EQ(dims[0] / tp_size, rows_per_rank)
+      << "Local packed projection row counts do not match gathered tensor "
+         "shape";
+
+  std::vector<std::shared_ptr<Tensor>> reordered_shards;
+  reordered_shards.reserve(static_cast<size_t>(tp_size) *
+                           local_projection_rows.size());
+  int64_t projection_offset = 0;
+  for (int64_t local_rows : local_projection_rows) {
+    for (int rank = 0; rank < tp_size; ++rank) {
+      const int64_t base =
+          static_cast<int64_t>(rank) * rows_per_rank + projection_offset;
+      reordered_shards.push_back(
+          gathered_tensor->Slice(0, base, base + local_rows));
     }
-    CHECK_EQ(dims[0] / tp_size, rows_per_rank)
-        << "Local packed projection row counts do not match gathered tensor shape";
-
-    std::vector<std::shared_ptr<Tensor>> reordered_shards;
-    reordered_shards.reserve(static_cast<size_t>(tp_size) * local_projection_rows.size());
-    int64_t projection_offset = 0;
-    for (int64_t local_rows : local_projection_rows) {
-        for (int rank = 0; rank < tp_size; ++rank) {
-            const int64_t base = static_cast<int64_t>(rank) * rows_per_rank + projection_offset;
-            reordered_shards.push_back(gathered_tensor->Slice(0, base, base + local_rows));
-        }
-        projection_offset += local_rows;
-    }
-    return nn::function::Concat(reordered_shards, 0);
+    projection_offset += local_rows;
+  }
+  return nn::function::Concat(reordered_shards, 0);
 }
 
-} // namespace
+}  // namespace
 
 namespace detail {
 
-// TODO: Reuse this packed-QKV sharding logic in TP checkpoint loading once the checkpoint infrastructure is stable.
-// The current TP loader reads rank-local weights directly by file offset instead of slicing a materialized full tensor.
-std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows,
-                                                            int tp_rank, int tp_size) {
-    CHECK(full_tensor != nullptr);
-    CHECK_GE(full_tensor->Dims().size(), 1);
-    CHECK_GT(q_rows, 0);
-    CHECK_GT(full_tensor->Dims()[0], q_rows) << "Packed QKV tensor must contain Q, K, and V rows";
-    CHECK_EQ((full_tensor->Dims()[0] - q_rows) % 2, 0) << "Packed QKV K/V rows must be balanced";
+// TODO: Reuse this packed-QKV sharding logic in TP checkpoint loading once the
+// checkpoint infrastructure is stable. The current TP loader reads rank-local
+// weights directly by file offset instead of slicing a materialized full
+// tensor.
+std::shared_ptr<Tensor> SlicePackedQKVRowsForTensorParallel(
+    const std::shared_ptr<Tensor> &full_tensor, int64_t q_rows, int tp_rank,
+    int tp_size) {
+  CHECK(full_tensor != nullptr);
+  CHECK_GE(full_tensor->Dims().size(), 1);
+  CHECK_GT(q_rows, 0);
+  CHECK_GT(full_tensor->Dims()[0], q_rows)
+      << "Packed QKV tensor must contain Q, K, and V rows";
+  CHECK_EQ((full_tensor->Dims()[0] - q_rows) % 2, 0)
+      << "Packed QKV K/V rows must be balanced";
 
-    const int64_t kv_rows = (full_tensor->Dims()[0] - q_rows) / 2;
-    CHECK_GT(kv_rows, 0);
-    return SlicePackedProjectionRowsForTensorParallel(full_tensor, {q_rows, kv_rows, kv_rows}, tp_rank, tp_size);
+  const int64_t kv_rows = (full_tensor->Dims()[0] - q_rows) / 2;
+  CHECK_GT(kv_rows, 0);
+  return SlicePackedProjectionRowsForTensorParallel(
+      full_tensor, {q_rows, kv_rows, kv_rows}, tp_rank, tp_size);
 }
 
-std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
-                                                               int64_t q_rows, int tp_size) {
-    CHECK(gathered_tensor != nullptr);
-    CHECK_GE(gathered_tensor->Dims().size(), 1);
-    CHECK_GT(tp_size, 0);
-    CHECK_GT(q_rows, 0);
-    CHECK_EQ(q_rows % tp_size, 0) << "Q rows must be divisible by TP size";
+std::shared_ptr<Tensor> RestorePackedQKVRowsFromTensorParallel(
+    const std::shared_ptr<Tensor> &gathered_tensor, int64_t q_rows,
+    int tp_size) {
+  CHECK(gathered_tensor != nullptr);
+  CHECK_GE(gathered_tensor->Dims().size(), 1);
+  CHECK_GT(tp_size, 0);
+  CHECK_GT(q_rows, 0);
+  CHECK_EQ(q_rows % tp_size, 0) << "Q rows must be divisible by TP size";
 
-    const int64_t q_local_rows = q_rows / tp_size;
-    const int64_t local_rows = gathered_tensor->Dims()[0] / tp_size;
-    CHECK_GT(local_rows, q_local_rows) << "Gathered packed QKV tensor must contain local Q, K, and V rows";
-    CHECK_EQ((local_rows - q_local_rows) % 2, 0) << "Local packed QKV K/V rows must be balanced";
-    const int64_t kv_local_rows = (local_rows - q_local_rows) / 2;
-    CHECK_GT(kv_local_rows, 0);
-    return RestorePackedProjectionRowsFromTensorParallel(gathered_tensor, {q_local_rows, kv_local_rows, kv_local_rows},
-                                                         tp_size);
+  const int64_t q_local_rows = q_rows / tp_size;
+  const int64_t local_rows = gathered_tensor->Dims()[0] / tp_size;
+  CHECK_GT(local_rows, q_local_rows)
+      << "Gathered packed QKV tensor must contain local Q, K, and V rows";
+  CHECK_EQ((local_rows - q_local_rows) % 2, 0)
+      << "Local packed QKV K/V rows must be balanced";
+  const int64_t kv_local_rows = (local_rows - q_local_rows) / 2;
+  CHECK_GT(kv_local_rows, 0);
+  return RestorePackedProjectionRowsFromTensorParallel(
+      gathered_tensor, {q_local_rows, kv_local_rows, kv_local_rows}, tp_size);
 }
 
-std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(const std::shared_ptr<Tensor> &full_tensor, int tp_rank,
-                                                               int tp_size) {
-    CHECK(full_tensor != nullptr);
-    CHECK_GE(full_tensor->Dims().size(), 1);
-    CHECK_EQ(full_tensor->Dims()[0] % 2, 0) << "Packed SwiGLU tensor must contain balanced gate and up rows";
+std::shared_ptr<Tensor> SlicePackedSwiGLURowsForTensorParallel(
+    const std::shared_ptr<Tensor> &full_tensor, int tp_rank, int tp_size) {
+  CHECK(full_tensor != nullptr);
+  CHECK_GE(full_tensor->Dims().size(), 1);
+  CHECK_EQ(full_tensor->Dims()[0] % 2, 0)
+      << "Packed SwiGLU tensor must contain balanced gate and up rows";
 
-    const int64_t rows_per_projection = full_tensor->Dims()[0] / 2;
-    CHECK_GT(rows_per_projection, 0);
-    return SlicePackedProjectionRowsForTensorParallel(full_tensor, {rows_per_projection, rows_per_projection}, tp_rank,
-                                                      tp_size);
+  const int64_t rows_per_projection = full_tensor->Dims()[0] / 2;
+  CHECK_GT(rows_per_projection, 0);
+  return SlicePackedProjectionRowsForTensorParallel(
+      full_tensor, {rows_per_projection, rows_per_projection}, tp_rank,
+      tp_size);
 }
 
-std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(const std::shared_ptr<Tensor> &gathered_tensor,
-                                                                  int tp_size) {
-    CHECK(gathered_tensor != nullptr);
-    CHECK_GE(gathered_tensor->Dims().size(), 1);
-    CHECK_GT(tp_size, 0);
-    const int64_t rows_per_rank = gathered_tensor->Dims()[0] / tp_size;
-    CHECK_EQ(rows_per_rank % 2, 0) << "Local packed SwiGLU tensor must contain balanced gate and up rows";
-    const int64_t local_rows = rows_per_rank / 2;
-    CHECK_GT(local_rows, 0);
-    return RestorePackedProjectionRowsFromTensorParallel(gathered_tensor, {local_rows, local_rows}, tp_size);
+std::shared_ptr<Tensor> RestorePackedSwiGLURowsFromTensorParallel(
+    const std::shared_ptr<Tensor> &gathered_tensor, int tp_size) {
+  CHECK(gathered_tensor != nullptr);
+  CHECK_GE(gathered_tensor->Dims().size(), 1);
+  CHECK_GT(tp_size, 0);
+  const int64_t rows_per_rank = gathered_tensor->Dims()[0] / tp_size;
+  CHECK_EQ(rows_per_rank % 2, 0)
+      << "Local packed SwiGLU tensor must contain balanced gate and up rows";
+  const int64_t local_rows = rows_per_rank / 2;
+  CHECK_GT(local_rows, 0);
+  return RestorePackedProjectionRowsFromTensorParallel(
+      gathered_tensor, {local_rows, local_rows}, tp_size);
 }
 
-} // namespace detail
+}  // namespace detail
 
-std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model, const LoRAConfig &config) {
-    // In-place injection: modify the module tree directly
-    // No wrapper, no base_model_, no extra layer
-    model = InjectLoRALayers(model, config);
+std::shared_ptr<Module> GetLoRAModel(std::shared_ptr<Module> model,
+                                     const LoRAConfig &config) {
+  // In-place injection: modify the module tree directly
+  // No wrapper, no base_model_, no extra layer
+  model = InjectLoRALayers(model, config);
 
-    // Freeze all non-LoRA parameters in the model
-    // This is needed to freeze modules that are NOT LoRA targets (e.g., embedding, LayerNorm)
-    // Uses StateDict() to get ALL parameters (not just trainable ones like Parameters())
-    FreezeBaseModel(model);
+  // Freeze all non-LoRA parameters in the model
+  // This is needed to freeze modules that are NOT LoRA targets (e.g.,
+  // embedding, LayerNorm) Uses StateDict() to get ALL parameters (not just
+  // trainable ones like Parameters())
+  FreezeBaseModel(model);
 
-    LOG(INFO) << "GetLoRAModel: Applied LoRA in-place, rank=" << config.rank << ", alpha=" << config.alpha;
-    return model;
+  LOG(INFO) << "GetLoRAModel: Applied LoRA in-place, rank=" << config.rank
+            << ", alpha=" << config.alpha;
+  return model;
 }
 
-void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path, std::shared_ptr<Module> new_module) {
-    // Parse the path (e.g., "transformer.h.0.attn.c_attn" -> ["transformer", "h", "0", "attn", "c_attn"])
-    std::vector<std::string> parts;
-    std::string remaining = path;
-    size_t pos = 0;
-    while ((pos = remaining.find('.')) != std::string::npos) {
-        parts.push_back(remaining.substr(0, pos));
-        remaining = remaining.substr(pos + 1);
+void ReplaceModuleByPath(std::shared_ptr<Module> model, const std::string &path,
+                         std::shared_ptr<Module> new_module) {
+  // Parse the path (e.g., "transformer.h.0.attn.c_attn" -> ["transformer", "h",
+  // "0", "attn", "c_attn"])
+  std::vector<std::string> parts;
+  std::string remaining = path;
+  size_t pos = 0;
+  while ((pos = remaining.find('.')) != std::string::npos) {
+    parts.push_back(remaining.substr(0, pos));
+    remaining = remaining.substr(pos + 1);
+  }
+  parts.push_back(remaining);
+
+  // Navigate to parent module
+  std::shared_ptr<Module> current = model;
+  for (size_t i = 0; i < parts.size() - 1; ++i) {
+    current = current->mutable_module(parts[i]);
+    if (!current) {
+      LOG(ERROR) << "ReplaceModuleByPath: Failed to find path: " << path;
+      return;
     }
-    parts.push_back(remaining);
+  }
 
-    // Navigate to parent module
-    std::shared_ptr<Module> current = model;
-    for (size_t i = 0; i < parts.size() - 1; ++i) {
-        current = current->mutable_module(parts[i]);
-        if (!current) {
-            LOG(ERROR) << "ReplaceModuleByPath: Failed to find path: " << path;
-            return;
-        }
-    }
-
-    // Replace the module
-    const std::string &module_name = parts.back();
-    current->mutable_module(module_name) = new_module;
+  // Replace the module
+  const std::string &module_name = parts.back();
+  current->mutable_module(module_name) = new_module;
 }
 
-std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model, const LoRAConfig &config) {
-    // Use NamedModules() to automatically traverse the entire model hierarchy
-    auto named_modules = model->NamedModules();
+std::shared_ptr<Module> InjectLoRALayers(std::shared_ptr<Module> model,
+                                         const LoRAConfig &config) {
+  // Use NamedModules() to automatically traverse the entire model hierarchy
+  auto named_modules = model->NamedModules();
 
-    int lora_layers_applied = 0;
-    std::shared_ptr<Module> result = model;
+  int lora_layers_applied = 0;
+  std::shared_ptr<Module> result = model;
 
-    for (const auto &[name, module] : named_modules) {
-        // Get module type
-        auto type = module->type();
+  for (const auto &[name, module] : named_modules) {
+    // Get module type
+    auto type = module->type();
 
-        // Check if this module should have LoRA applied
-        // For root module (name.empty()), check if its type matches target_modules
-        bool should_apply = name.empty() ? config.ShouldApplyLoRA(type) : config.ShouldApplyLoRA(name);
-        if (!should_apply) {
-            continue;
-        }
-
-        if (type == Linear::kType) {
-            if (dynamic_cast<LoRALinear *>(module.get())) {
-                continue;
-            }
-            if (name.empty()) {
-                // Root module is Linear - create new LoRA module and return it
-                result = std::make_shared<LoRALinear>(module, config);
-            } else {
-                auto lora_module = std::make_shared<LoRALinear>(module, config);
-                ReplaceModuleByPath(model, name, lora_module);
-            }
-            lora_layers_applied++;
-        } else if (type == parallel::ColumnParallelLinear::kType) {
-            if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
-                continue;
-            }
-
-            auto column_module = std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(module);
-            CHECK(column_module != nullptr) << "Failed to cast module to ColumnParallelLinear: " << name;
-
-            if (name.empty()) {
-                result = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
-            } else {
-                auto lora_module = std::make_shared<LoRAColumnParallelLinear>(column_module, config);
-                ReplaceModuleByPath(model, name, lora_module);
-            }
-            lora_layers_applied++;
-        } else if (type == parallel::RowParallelLinear::kType) {
-            if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
-                continue;
-            }
-
-            auto row_module = std::dynamic_pointer_cast<parallel::RowParallelLinear>(module);
-            CHECK(row_module != nullptr) << "Failed to cast module to RowParallelLinear: " << name;
-
-            if (name.empty()) {
-                result = std::make_shared<LoRARowParallelLinear>(row_module, config);
-            } else {
-                auto lora_module = std::make_shared<LoRARowParallelLinear>(row_module, config);
-                ReplaceModuleByPath(model, name, lora_module);
-            }
-            lora_layers_applied++;
-        }
+    // Check if this module should have LoRA applied
+    // For root module (name.empty()), check if its type matches target_modules
+    bool should_apply = name.empty() ? config.ShouldApplyLoRA(type)
+                                     : config.ShouldApplyLoRA(name);
+    if (!should_apply) {
+      continue;
     }
 
-    LOG(INFO) << "InjectLoRALayers: Applied LoRA to " << lora_layers_applied << " layers "
-              << "(rank=" << config.rank << ", alpha=" << config.alpha << ")";
-    return result;
+    if (type == Linear::kType) {
+      if (dynamic_cast<LoRALinear *>(module.get())) {
+        continue;
+      }
+      if (name.empty()) {
+        // Root module is Linear - create new LoRA module and return it
+        result = std::make_shared<LoRALinear>(module, config);
+      } else {
+        auto lora_module = std::make_shared<LoRALinear>(module, config);
+        ReplaceModuleByPath(model, name, lora_module);
+      }
+      lora_layers_applied++;
+    } else if (type == parallel::ColumnParallelLinear::kType) {
+      if (dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+        continue;
+      }
+
+      auto column_module =
+          std::dynamic_pointer_cast<parallel::ColumnParallelLinear>(module);
+      CHECK(column_module != nullptr)
+          << "Failed to cast module to ColumnParallelLinear: " << name;
+
+      if (name.empty()) {
+        result =
+            std::make_shared<LoRAColumnParallelLinear>(column_module, config);
+      } else {
+        auto lora_module =
+            std::make_shared<LoRAColumnParallelLinear>(column_module, config);
+        ReplaceModuleByPath(model, name, lora_module);
+      }
+      lora_layers_applied++;
+    } else if (type == parallel::RowParallelLinear::kType) {
+      if (dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+        continue;
+      }
+
+      auto row_module =
+          std::dynamic_pointer_cast<parallel::RowParallelLinear>(module);
+      CHECK(row_module != nullptr)
+          << "Failed to cast module to RowParallelLinear: " << name;
+
+      if (name.empty()) {
+        result = std::make_shared<LoRARowParallelLinear>(row_module, config);
+      } else {
+        auto lora_module =
+            std::make_shared<LoRARowParallelLinear>(row_module, config);
+        ReplaceModuleByPath(model, name, lora_module);
+      }
+      lora_layers_applied++;
+    }
+  }
+
+  LOG(INFO) << "InjectLoRALayers: Applied LoRA to " << lora_layers_applied
+            << " layers "
+            << "(rank=" << config.rank << ", alpha=" << config.alpha << ")";
+  return result;
 }
 
 void FreezeBaseModel(std::shared_ptr<Module> model) {
-    // Freeze all parameters by setting requires_grad to false
-    model->Apply([](Module *m) {
-        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(false); }
-    });
+  // Freeze all parameters by setting requires_grad to false
+  model->Apply([](Module *m) {
+    for (auto &[name, param] : m->StateDict()) {
+      param->set_requires_grad(false);
+    }
+  });
 
-    // Re-enable training for LoRA parameters (lora_A and lora_B)
-    // This ensures LoRA weights remain trainable after freezing all parameters
-    auto lora_params = GetLoRAParameters(model);
-    for (auto &param : lora_params) { param->set_requires_grad(true); }
+  // Re-enable training for LoRA parameters (lora_A and lora_B)
+  // This ensures LoRA weights remain trainable after freezing all parameters
+  auto lora_params = GetLoRAParameters(model);
+  for (auto &param : lora_params) {
+    param->set_requires_grad(true);
+  }
 }
 
 void UnfreezeModel(std::shared_ptr<Module> model) {
-    model->Apply([](Module *m) {
-        for (auto &[name, param] : m->StateDict()) { param->set_requires_grad(true); }
-    });
-}
-
-std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(const std::shared_ptr<Module> &model) {
-    std::vector<std::shared_ptr<Tensor>> lora_params;
-    std::unordered_set<const Tensor *> visited;
-
-    auto collect_lora
-        = [&lora_params, &visited](auto *lora_module) {
-              CHECK(!lora_module->IsMerged())
-                  << "GetLoRAParameters() called on merged LoRA module. Call UnmergeLoRAWeights() first.";
-              for (auto &param : lora_module->LoRAParameters()) {
-                  if (visited.insert(param.get()).second) {
-                      lora_params.push_back(param);
-                  }
-              }
-          };
-
-    model->Apply([&collect_lora](Module *m) {
-        if (auto lora_module = dynamic_cast<LoRALinear *>(m)) {
-            collect_lora(lora_module);
-        } else if (auto lora_module = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
-            collect_lora(lora_module);
-        } else if (auto lora_module = dynamic_cast<LoRARowParallelLinear *>(m)) {
-            collect_lora(lora_module);
-        }
-    });
-
-    return lora_params;
-}
-
-std::vector<std::shared_ptr<Tensor>> GetBaseParameters(const std::shared_ptr<Module> &model) {
-    std::vector<std::shared_ptr<Tensor>> base_params;
-
-    for (auto &[name, param] : model->StateDict()) {
-        // Skip LoRA parameters
-        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
-            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
-            continue;
-        }
-        base_params.push_back(param);
+  model->Apply([](Module *m) {
+    for (auto &[name, param] : m->StateDict()) {
+      param->set_requires_grad(true);
     }
+  });
+}
 
-    return base_params;
+std::vector<std::shared_ptr<Tensor>> GetLoRAParameters(
+    const std::shared_ptr<Module> &model) {
+  std::vector<std::shared_ptr<Tensor>> lora_params;
+  std::unordered_set<const Tensor *> visited;
+
+  auto collect_lora = [&lora_params, &visited](auto *lora_module) {
+    CHECK(!lora_module->IsMerged())
+        << "GetLoRAParameters() called on merged LoRA module. Call "
+           "UnmergeLoRAWeights() first.";
+    for (auto &param : lora_module->LoRAParameters()) {
+      if (visited.insert(param.get()).second) {
+        lora_params.push_back(param);
+      }
+    }
+  };
+
+  model->Apply([&collect_lora](Module *m) {
+    if (auto lora_module = dynamic_cast<LoRALinear *>(m)) {
+      collect_lora(lora_module);
+    } else if (auto lora_module = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+      collect_lora(lora_module);
+    } else if (auto lora_module = dynamic_cast<LoRARowParallelLinear *>(m)) {
+      collect_lora(lora_module);
+    }
+  });
+
+  return lora_params;
+}
+
+std::vector<std::shared_ptr<Tensor>> GetBaseParameters(
+    const std::shared_ptr<Module> &model) {
+  std::vector<std::shared_ptr<Tensor>> base_params;
+
+  for (auto &[name, param] : model->StateDict()) {
+    // Skip LoRA parameters
+    if (name.find(LoRALinear::kParamLoraAName) != std::string::npos ||
+        name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
+      continue;
+    }
+    base_params.push_back(param);
+  }
+
+  return base_params;
 }
 
 void MergeLoRAWeights(std::shared_ptr<Module> model) {
-    model->Apply([](Module *m) {
-        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
-            lora->MergeWeights();
-        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
-            lora->MergeWeights();
-        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
-            lora->MergeWeights();
-        }
-    });
+  model->Apply([](Module *m) {
+    if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+      lora->MergeWeights();
+    } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+      lora->MergeWeights();
+    } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+      lora->MergeWeights();
+    }
+  });
 }
 
 void UnmergeLoRAWeights(std::shared_ptr<Module> model) {
-    model->Apply([](Module *m) {
-        if (auto lora = dynamic_cast<LoRALinear *>(m)) {
-            lora->UnmergeWeights();
-        } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
-            lora->UnmergeWeights();
-        } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
-            lora->UnmergeWeights();
-        }
-    });
+  model->Apply([](Module *m) {
+    if (auto lora = dynamic_cast<LoRALinear *>(m)) {
+      lora->UnmergeWeights();
+    } else if (auto lora = dynamic_cast<LoRAColumnParallelLinear *>(m)) {
+      lora->UnmergeWeights();
+    } else if (auto lora = dynamic_cast<LoRARowParallelLinear *>(m)) {
+      lora->UnmergeWeights();
+    }
+  });
 }
 
 std::shared_ptr<Module> MergeAndUnload(std::shared_ptr<Module> model) {
-    // First merge all LoRA weights
-    MergeLoRAWeights(model);
+  // First merge all LoRA weights
+  MergeLoRAWeights(model);
 
-    // Traverse model and replace LoRA modules with base modules
-    auto named_modules = model->NamedModules();
-    std::shared_ptr<Module> result = model;
+  // Traverse model and replace LoRA modules with base modules
+  auto named_modules = model->NamedModules();
+  std::shared_ptr<Module> result = model;
 
-    for (const auto &[name, module] : named_modules) {
-        if (auto *lora = dynamic_cast<LoRALinear *>(module.get())) {
-            // Create base Linear with same dimensions
-            auto base = std::make_shared<nn::Linear>(lora->in_features(), lora->out_features(), lora->has_bias(),
-                                                     lora->parameter(nn::Linear::kParamWeightName)->GetDevice());
-            // Share the merged weight
-            *base->mutable_parameter(nn::Linear::kParamWeightName) = lora->parameter(nn::Linear::kParamWeightName);
-            if (lora->has_bias()) {
-                *base->mutable_parameter(nn::Linear::kParamBiasName) = lora->parameter(nn::Linear::kParamBiasName);
-            }
+  for (const auto &[name, module] : named_modules) {
+    if (auto *lora = dynamic_cast<LoRALinear *>(module.get())) {
+      // Create base Linear with same dimensions
+      auto base = std::make_shared<nn::Linear>(
+          lora->in_features(), lora->out_features(), lora->has_bias(),
+          lora->parameter(nn::Linear::kParamWeightName)->GetDevice());
+      // Share the merged weight
+      *base->mutable_parameter(nn::Linear::kParamWeightName) =
+          lora->parameter(nn::Linear::kParamWeightName);
+      if (lora->has_bias()) {
+        *base->mutable_parameter(nn::Linear::kParamBiasName) =
+            lora->parameter(nn::Linear::kParamBiasName);
+      }
 
-            if (name.empty()) {
-                result = base;
-            } else {
-                ReplaceModuleByPath(model, name, base);
-            }
-        } else if (auto *lora = dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
-            auto base = std::make_shared<parallel::ColumnParallelLinear>(
-                lora->in_features(), lora->out_features(), lora->bias(), lora->gather_output(),
-                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
-            *base->mutable_parameter(parallel::ColumnParallelLinear::kParamWeightName)
-                = lora->parameter(parallel::ColumnParallelLinear::kParamWeightName);
-            if (lora->bias()) {
-                *base->mutable_parameter(parallel::ColumnParallelLinear::kParamBiasName)
-                    = lora->parameter(parallel::ColumnParallelLinear::kParamBiasName);
-            }
+      if (name.empty()) {
+        result = base;
+      } else {
+        ReplaceModuleByPath(model, name, base);
+      }
+    } else if (auto *lora =
+                   dynamic_cast<LoRAColumnParallelLinear *>(module.get())) {
+      auto base = std::make_shared<parallel::ColumnParallelLinear>(
+          lora->in_features(), lora->out_features(), lora->bias(),
+          lora->gather_output(), lora->input_is_parallel(),
+          lora->skip_bias_add(), lora->sequence_parallel());
+      *base->mutable_parameter(
+          parallel::ColumnParallelLinear::kParamWeightName) =
+          lora->parameter(parallel::ColumnParallelLinear::kParamWeightName);
+      if (lora->bias()) {
+        *base->mutable_parameter(
+            parallel::ColumnParallelLinear::kParamBiasName) =
+            lora->parameter(parallel::ColumnParallelLinear::kParamBiasName);
+      }
 
-            if (name.empty()) {
-                result = base;
-            } else {
-                ReplaceModuleByPath(model, name, base);
-            }
-        } else if (auto *lora = dynamic_cast<LoRARowParallelLinear *>(module.get())) {
-            auto base = std::make_shared<parallel::RowParallelLinear>(
-                lora->in_features(), lora->out_features(), lora->bias(), lora->reduce_output(),
-                lora->input_is_parallel(), lora->skip_bias_add(), lora->sequence_parallel());
-            *base->mutable_parameter(parallel::RowParallelLinear::kParamWeightName)
-                = lora->parameter(parallel::RowParallelLinear::kParamWeightName);
-            if (lora->bias()) {
-                *base->mutable_parameter(parallel::RowParallelLinear::kParamBiasName)
-                    = lora->parameter(parallel::RowParallelLinear::kParamBiasName);
-            }
+      if (name.empty()) {
+        result = base;
+      } else {
+        ReplaceModuleByPath(model, name, base);
+      }
+    } else if (auto *lora =
+                   dynamic_cast<LoRARowParallelLinear *>(module.get())) {
+      auto base = std::make_shared<parallel::RowParallelLinear>(
+          lora->in_features(), lora->out_features(), lora->bias(),
+          lora->reduce_output(), lora->input_is_parallel(),
+          lora->skip_bias_add(), lora->sequence_parallel());
+      *base->mutable_parameter(parallel::RowParallelLinear::kParamWeightName) =
+          lora->parameter(parallel::RowParallelLinear::kParamWeightName);
+      if (lora->bias()) {
+        *base->mutable_parameter(parallel::RowParallelLinear::kParamBiasName) =
+            lora->parameter(parallel::RowParallelLinear::kParamBiasName);
+      }
 
-            if (name.empty()) {
-                result = base;
-            } else {
-                ReplaceModuleByPath(model, name, base);
-            }
-        }
+      if (name.empty()) {
+        result = base;
+      } else {
+        ReplaceModuleByPath(model, name, base);
+      }
     }
+  }
 
-    // Unfreeze all parameters so the model is fully usable
-    UnfreezeModel(result);
+  // Unfreeze all parameters so the model is fully usable
+  UnfreezeModel(result);
 
-    LOG(INFO) << "MergeAndUnload: Merged LoRA weights and removed LoRA modules";
-    return result;
+  LOG(INFO) << "MergeAndUnload: Merged LoRA weights and removed LoRA modules";
+  return result;
 }
 
-std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(const std::shared_ptr<Module> &model) {
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> lora_state_dict;
+std::unordered_map<std::string, std::shared_ptr<Tensor>> LoRAStateDict(
+    const std::shared_ptr<Module> &model) {
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> lora_state_dict;
 
-    // This is intentionally the local model state. Under TP, sharded LoRA
-    // parameters remain local shards; SaveLoRAWeights() exports portable tensors.
-    for (auto &[name, param] : model->StateDict()) {
-        // Only include LoRA parameters
-        if (name.find(LoRALinear::kParamLoraAName) != std::string::npos
-            || name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
-            lora_state_dict[name] = param;
-        }
+  // This is intentionally the local model state. Under TP, sharded LoRA
+  // parameters remain local shards; SaveLoRAWeights() exports portable tensors.
+  for (auto &[name, param] : model->StateDict()) {
+    // Only include LoRA parameters
+    if (name.find(LoRALinear::kParamLoraAName) != std::string::npos ||
+        name.find(LoRALinear::kParamLoraBName) != std::string::npos) {
+      lora_state_dict[name] = param;
     }
+  }
 
-    return lora_state_dict;
+  return lora_state_dict;
 }
 
-void LoadLoRAStateDict(std::shared_ptr<Module> model,
-                       const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) {
-    auto model_state_dict = model->StateDict();
-    auto shardings = BuildLoRATensorShardings(model);
+void LoadLoRAStateDict(
+    std::shared_ptr<Module> model,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &state_dict) {
+  auto model_state_dict = model->StateDict();
+  auto shardings = BuildLoRATensorShardings(model);
 
-    for (auto &[name, param] : state_dict) {
-        const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
-        LoadLoRATensorIntoModel(resolved_name, param, model_state_dict, shardings);
-    }
+  for (auto &[name, param] : state_dict) {
+    const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
+    LoadLoRATensorIntoModel(resolved_name, param, model_state_dict, shardings);
+  }
 }
 
-void SaveLoRAWeights(const std::shared_ptr<Module> &model, const std::string &filepath) {
-    auto adapter_model = UnwrapDistributedDataParallel(model);
-    auto lora_state_dict = LoRAStateDict(adapter_model);
-    auto sorted_names = SortedLoRAStateDictNames(lora_state_dict);
-    auto shardings = BuildLoRATensorShardings(adapter_model);
+void SaveLoRAWeights(const std::shared_ptr<Module> &model,
+                     const std::string &filepath) {
+  auto adapter_model = UnwrapDistributedDataParallel(model);
+  auto lora_state_dict = LoRAStateDict(adapter_model);
+  auto sorted_names = SortedLoRAStateDictNames(lora_state_dict);
+  auto shardings = BuildLoRATensorShardings(adapter_model);
 
-    // TP ranks in the primary DP/PP group must all run the gather loop below.
-    // Only TP rank 0 writes the file after receiving full tensors.
-    //
-    // TODO: PP save needs a per-stage or aggregated adapter format. The current
-    // path only writes from pp=0, so it is not a complete PP checkpoint.
-    if (!IsPrimarySaveTPGroupRank()) {
-        LOG(INFO) << "Skip saving LoRA weights on non-primary DP/PP rank.";
-        return;
-    }
+  // TP ranks in the primary DP/PP group must all run the gather loop below.
+  // Only TP rank 0 writes the file after receiving full tensors.
+  //
+  // TODO: PP save needs a per-stage or aggregated adapter format. The current
+  // path only writes from pp=0, so it is not a complete PP checkpoint.
+  if (!IsPrimarySaveTPGroupRank()) {
+    LOG(INFO) << "Skip saving LoRA weights on non-primary DP/PP rank.";
+    return;
+  }
 
-    const bool is_writer = IsSaveWriterRank();
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> exported_tensors;
+  const bool is_writer = IsSaveWriterRank();
+  std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> exported_tensors;
+  if (is_writer) {
+    exported_tensors.reserve(sorted_names.size());
+  }
+
+  for (const auto &name : sorted_names) {
+    auto exported = ExportLoRATensorForSave(name, lora_state_dict.at(name),
+                                            lora_state_dict, shardings);
     if (is_writer) {
-        exported_tensors.reserve(sorted_names.size());
+      exported_tensors.emplace_back(name, exported);
+    }
+  }
+
+  if (!is_writer) {
+    return;
+  }
+
+  std::ofstream file(filepath, std::ios::binary);
+  CHECK(file.is_open()) << "Failed to open file for writing: " << filepath;
+
+  // Write magic number
+  uint32_t magic = 0x4C4F5241;  // "LORA"
+  file.write(reinterpret_cast<const char *>(&magic), sizeof(magic));
+
+  // Write version
+  uint32_t version = 1;
+  file.write(reinterpret_cast<const char *>(&version), sizeof(version));
+
+  // Write number of tensors
+  uint32_t num_tensors = static_cast<uint32_t>(exported_tensors.size());
+  file.write(reinterpret_cast<const char *>(&num_tensors), sizeof(num_tensors));
+
+  // Write each tensor
+  for (const auto &[name, tensor] : exported_tensors) {
+    // Write name length and name
+    uint32_t name_len = static_cast<uint32_t>(name.length());
+    file.write(reinterpret_cast<const char *>(&name_len), sizeof(name_len));
+    file.write(name.c_str(), name_len);
+
+    // Write tensor dimensions
+    const auto &dims = tensor->Dims();
+    uint32_t num_dims = static_cast<uint32_t>(dims.size());
+    file.write(reinterpret_cast<const char *>(&num_dims), sizeof(num_dims));
+    for (auto dim : dims) {
+      int64_t d = dim;
+      file.write(reinterpret_cast<const char *>(&d), sizeof(d));
     }
 
-    for (const auto &name : sorted_names) {
-        auto exported = ExportLoRATensorForSave(name, lora_state_dict.at(name), lora_state_dict, shardings);
-        if (is_writer) {
-            exported_tensors.emplace_back(name, exported);
-        }
-    }
+    // Write tensor data (copy to CPU first if needed)
+    int64_t num_elements = tensor->NumElements();
+    Tensor cpu_tensor = tensor->To(Device(Device::DeviceType::kCPU, 0));
+    file.write(reinterpret_cast<const char *>(cpu_tensor.DataPtr()),
+               num_elements * sizeof(float));
+  }
 
-    if (!is_writer) {
-        return;
-    }
-
-    std::ofstream file(filepath, std::ios::binary);
-    CHECK(file.is_open()) << "Failed to open file for writing: " << filepath;
-
-    // Write magic number
-    uint32_t magic = 0x4C4F5241; // "LORA"
-    file.write(reinterpret_cast<const char *>(&magic), sizeof(magic));
-
-    // Write version
-    uint32_t version = 1;
-    file.write(reinterpret_cast<const char *>(&version), sizeof(version));
-
-    // Write number of tensors
-    uint32_t num_tensors = static_cast<uint32_t>(exported_tensors.size());
-    file.write(reinterpret_cast<const char *>(&num_tensors), sizeof(num_tensors));
-
-    // Write each tensor
-    for (const auto &[name, tensor] : exported_tensors) {
-        // Write name length and name
-        uint32_t name_len = static_cast<uint32_t>(name.length());
-        file.write(reinterpret_cast<const char *>(&name_len), sizeof(name_len));
-        file.write(name.c_str(), name_len);
-
-        // Write tensor dimensions
-        const auto &dims = tensor->Dims();
-        uint32_t num_dims = static_cast<uint32_t>(dims.size());
-        file.write(reinterpret_cast<const char *>(&num_dims), sizeof(num_dims));
-        for (auto dim : dims) {
-            int64_t d = dim;
-            file.write(reinterpret_cast<const char *>(&d), sizeof(d));
-        }
-
-        // Write tensor data (copy to CPU first if needed)
-        int64_t num_elements = tensor->NumElements();
-        Tensor cpu_tensor = tensor->To(Device(Device::DeviceType::kCPU, 0));
-        file.write(reinterpret_cast<const char *>(cpu_tensor.DataPtr()), num_elements * sizeof(float));
-    }
-
-    file.close();
-    LOG(INFO) << "Saved LoRA weights to " << filepath << " (" << num_tensors << " tensors)";
+  file.close();
+  LOG(INFO) << "Saved LoRA weights to " << filepath << " (" << num_tensors
+            << " tensors)";
 }
 
-void LoadLoRAWeights(std::shared_ptr<Module> model, const std::string &filepath) {
-    std::ifstream file(filepath, std::ios::binary);
-    CHECK(file.is_open()) << "Failed to open file for reading: " << filepath;
+void LoadLoRAWeights(std::shared_ptr<Module> model,
+                     const std::string &filepath) {
+  std::ifstream file(filepath, std::ios::binary);
+  CHECK(file.is_open()) << "Failed to open file for reading: " << filepath;
 
-    // Read and verify magic number
-    uint32_t magic;
-    file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
-    CHECK_EQ(magic, 0x4C4F5241) << "Invalid LoRA file format";
+  // Read and verify magic number
+  uint32_t magic;
+  file.read(reinterpret_cast<char *>(&magic), sizeof(magic));
+  CHECK_EQ(magic, 0x4C4F5241) << "Invalid LoRA file format";
 
-    // Read version
-    uint32_t version;
-    file.read(reinterpret_cast<char *>(&version), sizeof(version));
-    CHECK_EQ(version, 1) << "Unsupported LoRA file version: " << version;
+  // Read version
+  uint32_t version;
+  file.read(reinterpret_cast<char *>(&version), sizeof(version));
+  CHECK_EQ(version, 1) << "Unsupported LoRA file version: " << version;
 
-    // Read number of tensors
-    uint32_t num_tensors;
-    file.read(reinterpret_cast<char *>(&num_tensors), sizeof(num_tensors));
+  // Read number of tensors
+  uint32_t num_tensors;
+  file.read(reinterpret_cast<char *>(&num_tensors), sizeof(num_tensors));
 
-    auto model_state_dict = model->StateDict();
-    auto shardings = BuildLoRATensorShardings(model);
+  auto model_state_dict = model->StateDict();
+  auto shardings = BuildLoRATensorShardings(model);
 
-    // Read each tensor
-    for (uint32_t i = 0; i < num_tensors; ++i) {
-        // Read name
-        uint32_t name_len;
-        file.read(reinterpret_cast<char *>(&name_len), sizeof(name_len));
-        std::string name(name_len, '\0');
-        file.read(&name[0], name_len);
+  // Read each tensor
+  for (uint32_t i = 0; i < num_tensors; ++i) {
+    // Read name
+    uint32_t name_len;
+    file.read(reinterpret_cast<char *>(&name_len), sizeof(name_len));
+    std::string name(name_len, '\0');
+    file.read(&name[0], name_len);
 
-        // Read dimensions
-        uint32_t num_dims;
-        file.read(reinterpret_cast<char *>(&num_dims), sizeof(num_dims));
-        std::vector<int64_t> dims(num_dims);
-        for (uint32_t j = 0; j < num_dims; ++j) { file.read(reinterpret_cast<char *>(&dims[j]), sizeof(int64_t)); }
-
-        // Calculate number of elements
-        int64_t num_elements = 1;
-        for (auto dim : dims) { num_elements *= dim; }
-
-        // Read tensor data into a temporary CPU tensor
-        auto cpu_tensor = std::make_shared<Tensor>(dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
-        file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()), num_elements * sizeof(float));
-
-        const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
-        LoadLoRATensorIntoModel(resolved_name, cpu_tensor, model_state_dict, shardings);
+    // Read dimensions
+    uint32_t num_dims;
+    file.read(reinterpret_cast<char *>(&num_dims), sizeof(num_dims));
+    std::vector<int64_t> dims(num_dims);
+    for (uint32_t j = 0; j < num_dims; ++j) {
+      file.read(reinterpret_cast<char *>(&dims[j]), sizeof(int64_t));
     }
 
-    file.close();
-    LOG(INFO) << "Loaded LoRA weights from " << filepath << " (" << num_tensors << " tensors)";
+    // Calculate number of elements
+    int64_t num_elements = 1;
+    for (auto dim : dims) {
+      num_elements *= dim;
+    }
+
+    // Read tensor data into a temporary CPU tensor
+    auto cpu_tensor = std::make_shared<Tensor>(
+        dims, DataType::kFLOAT32, Device(Device::DeviceType::kCPU, 0));
+    file.read(reinterpret_cast<char *>(cpu_tensor->DataPtr()),
+              num_elements * sizeof(float));
+
+    const auto resolved_name = ResolveLoRAStateDictKey(name, model_state_dict);
+    LoadLoRATensorIntoModel(resolved_name, cpu_tensor, model_state_dict,
+                            shardings);
+  }
+
+  file.close();
+  LOG(INFO) << "Loaded LoRA weights from " << filepath << " (" << num_tensors
+            << " tensors)";
 }
 
 int64_t CountTrainableParameters(const std::shared_ptr<Module> &model) {
-    int64_t count = 0;
-    for (auto &param : model->Parameters()) {
-        if (param->requires_grad()) {
-            count += param->NumElements();
-        }
+  int64_t count = 0;
+  for (auto &param : model->Parameters()) {
+    if (param->requires_grad()) {
+      count += param->NumElements();
     }
-    return count;
+  }
+  return count;
 }
 
 int64_t CountTotalParameters(const std::shared_ptr<Module> &model) {
-    // Use Parameters() instead of StateDict() to avoid counting:
-    // 1. Shared/duplicated tensors (weight tying)
-    // 2. Buffers (which are not trainable parameters)
-    int64_t count = 0;
-    auto params = model->Parameters();
-    for (auto &param : params) { count += param->NumElements(); }
-    return count;
+  // Use Parameters() instead of StateDict() to avoid counting:
+  // 1. Shared/duplicated tensors (weight tying)
+  // 2. Buffers (which are not trainable parameters)
+  int64_t count = 0;
+  auto params = model->Parameters();
+  for (auto &param : params) {
+    count += param->NumElements();
+  }
+  return count;
 }
 
 void PrintLoRASummary(const std::shared_ptr<Module> &model, int global_rank) {
-    int64_t trainable = CountTrainableParameters(model);
-    int64_t total = CountTotalParameters(model);
-    int64_t frozen = total - trainable;
+  int64_t trainable = CountTrainableParameters(model);
+  int64_t total = CountTotalParameters(model);
+  int64_t frozen = total - trainable;
 
-    double trainable_pct = 100.0 * trainable / total;
+  double trainable_pct = 100.0 * trainable / total;
 
-    std::string title
-        = global_rank >= 0 ? " LoRA Model Summary (Rank " + std::to_string(global_rank) + ") " : " LoRA Model Summary ";
-    size_t pad_left = (40 - title.size()) / 2;
-    size_t pad_right = 40 - title.size() - pad_left;
-    std::string header = std::string(pad_left, '=') + title + std::string(pad_right, '=');
-    std::string separator(header.size(), '=');
+  std::string title = global_rank >= 0 ? " LoRA Model Summary (Rank " +
+                                             std::to_string(global_rank) + ") "
+                                       : " LoRA Model Summary ";
+  size_t pad_left = (40 - title.size()) / 2;
+  size_t pad_right = 40 - title.size() - pad_left;
+  std::string header =
+      std::string(pad_left, '=') + title + std::string(pad_right, '=');
+  std::string separator(header.size(), '=');
 
-    std::cout << header << std::endl;
-    std::cout << "Total parameters:     " << total << std::endl;
-    std::cout << "Trainable parameters: " << trainable << " (" << trainable_pct << "%)" << std::endl;
-    std::cout << "Frozen parameters:    " << frozen << std::endl;
-    std::cout << separator << std::endl;
+  std::cout << header << std::endl;
+  std::cout << "Total parameters:     " << total << std::endl;
+  std::cout << "Trainable parameters: " << trainable << " (" << trainable_pct
+            << "%)" << std::endl;
+  std::cout << "Frozen parameters:    " << frozen << std::endl;
+  std::cout << separator << std::endl;
 }
 
-std::unordered_set<std::string> ParseLoRATargetModules(const std::string &targets) {
-    std::unordered_set<std::string> result;
-    std::stringstream ss(targets);
-    std::string module;
-    while (std::getline(ss, module, ',')) {
-        // Trim whitespace
-        module.erase(module.find_last_not_of(" \t\r\n") + 1);
-        module.erase(0, module.find_first_not_of(" \t\r\n"));
-        if (!module.empty()) {
-            result.insert(module);
-        }
+std::unordered_set<std::string> ParseLoRATargetModules(
+    const std::string &targets) {
+  std::unordered_set<std::string> result;
+  std::stringstream ss(targets);
+  std::string module;
+  while (std::getline(ss, module, ',')) {
+    // Trim whitespace
+    module.erase(module.find_last_not_of(" \t\r\n") + 1);
+    module.erase(0, module.find_first_not_of(" \t\r\n"));
+    if (!module.empty()) {
+      result.insert(module);
     }
-    return result;
+  }
+  return result;
 }
 
-} // namespace infini_train::nn::lora
+}  // namespace infini_train::nn::lora

@@ -6,8 +6,8 @@
 #include "infini_train/include/autograd/loss.h"
 
 namespace infini_train::nn {
-std::vector<std::shared_ptr<Tensor>>
-CrossEntropyLoss::Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
-    return std::make_shared<autograd::CrossEntropy>()->Apply(input_tensors);
+std::vector<std::shared_ptr<Tensor>> CrossEntropyLoss::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  return std::make_shared<autograd::CrossEntropy>()->Apply(input_tensors);
 }
-} // namespace infini_train::nn
+}  // namespace infini_train::nn

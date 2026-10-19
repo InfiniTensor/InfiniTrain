@@ -16,47 +16,55 @@ using namespace infini_train;
 class AutogradMatmulForwardTest : public infini_train::test::InfiniTrainTest {};
 
 TEST_P(AutogradMatmulForwardTest, MatmulForward) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 4}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(1.0f);
-    auto matmul_fn = std::make_shared<autograd::Matmul>();
-    auto result = matmul_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 4},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(1.0f);
+  auto matmul_fn = std::make_shared<autograd::Matmul>();
+  auto result = matmul_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 4}));
 }
 
 TEST_P(AutogradMatmulForwardTest, MatmulDifferentShapes) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 4}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{4, 2}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(1.0f);
-    auto matmul_fn = std::make_shared<autograd::Matmul>();
-    auto result = matmul_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 4},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{4, 2},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(1.0f);
+  auto matmul_fn = std::make_shared<autograd::Matmul>();
+  auto result = matmul_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 2}));
 }
 
 TEST_P(AutogradMatmulForwardTest, MatmulBatch) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3, 4}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, 5}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(1.0f);
-    auto matmul_fn = std::make_shared<autograd::Matmul>();
-    auto result = matmul_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3, 5}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{2, 3, 4},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{2, 4, 5},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(1.0f);
+  auto matmul_fn = std::make_shared<autograd::Matmul>();
+  auto result = matmul_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{2, 3, 5}));
 }
 
 TEST_P(AutogradMatmulForwardTest, MatmulSquare) {
-    auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3}, DataType::kFLOAT32, GetDevice(), true);
-    a->Fill(1.0f);
-    auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 3}, DataType::kFLOAT32, GetDevice(), true);
-    b->Fill(1.0f);
-    auto matmul_fn = std::make_shared<autograd::Matmul>();
-    auto result = matmul_fn->Apply({a, b});
-    EXPECT_EQ(result.size(), 1);
-    EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 3}));
+  auto a = std::make_shared<Tensor>(std::vector<int64_t>{3, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  a->Fill(1.0f);
+  auto b = std::make_shared<Tensor>(std::vector<int64_t>{3, 3},
+                                    DataType::kFLOAT32, GetDevice(), true);
+  b->Fill(1.0f);
+  auto matmul_fn = std::make_shared<autograd::Matmul>();
+  auto result = matmul_fn->Apply({a, b});
+  EXPECT_EQ(result.size(), 1);
+  EXPECT_EQ(result[0]->Dims(), (std::vector<int64_t>{3, 3}));
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradMatmulForwardTest);
