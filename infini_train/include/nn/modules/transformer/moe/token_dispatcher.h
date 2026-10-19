@@ -4,12 +4,12 @@
 #include <memory>
 #include <vector>
 
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 
 namespace infini_train {
 class Tensor;
+enum class DataType : int8_t;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
