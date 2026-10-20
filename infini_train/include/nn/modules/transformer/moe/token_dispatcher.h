@@ -9,7 +9,6 @@
 
 namespace infini_train {
 class Tensor;
-enum class DataType : int8_t;
 } // namespace infini_train
 
 namespace infini_train::nn::parallel {
@@ -47,11 +46,31 @@ public:
     MoEAllGatherTokenDispatcher(int64_t num_local_experts, const std::vector<int64_t> &local_expert_ids,
                                 const TransformerConfig &config, const parallel::ProcessGroup *process_group);
 
+    // Inputs:
+    //   tokens:      [..., hidden_size]
+    //   routing_map: [num_tokens, num_global_experts]
+    //   probs:       [num_tokens, num_global_experts]
+    // Outputs:
+    //   tokens:      [num_tokens, hidden_size]
+    //   probs:       [num_tokens, num_global_experts]
     std::vector<std::shared_ptr<Tensor>> DispatchPreprocess(const std::shared_ptr<Tensor> &tokens,
                                                             const std::shared_ptr<Tensor> &routing_map,
                                                             const std::shared_ptr<Tensor> &probs) override;
+    // Inputs:
+    //   hidden_states: [num_local_tokens, hidden_size]
+    //   probs:         [num_local_tokens, num_global_experts]
+    //   routing_map_:  [num_local_tokens, num_global_experts]
+    // Outputs:
+    //   hidden_states: [group_size * num_local_tokens, hidden_size]
+    //   probs:         [group_size * num_local_tokens, num_global_experts]
     std::vector<std::shared_ptr<Tensor>> TokenDispatch(const std::shared_ptr<Tensor> &hidden_states,
                                                        const std::shared_ptr<Tensor> &probs) override;
+    // Inputs:
+    //   hidden_states: [group_tokens, hidden_size]
+    //   probs:         [group_tokens, num_global_experts]
+    //   routing_map_:  [group_tokens, num_global_experts]
+    // Outputs:
+    //   permutation_result: PermutationResult
     PermutationResult DispatchPostprocess(const std::shared_ptr<Tensor> &hidden_states,
                                           const std::shared_ptr<Tensor> &probs) override;
     std::shared_ptr<Tensor> CombinePreprocess(const std::shared_ptr<Tensor> &hidden_states) const override;
@@ -68,7 +87,6 @@ private:
     std::shared_ptr<Tensor> routing_map_;
     std::shared_ptr<Tensor> empty_route_hidden_states_;
     std::shared_ptr<Tensor> empty_route_probs_;
-    DataType local_probs_dtype_;
 };
 
 } // namespace infini_train::nn::moe

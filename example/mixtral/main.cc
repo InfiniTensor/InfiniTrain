@@ -32,6 +32,7 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
+#include "infini_train/include/nn/parallel/comm.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
@@ -39,6 +40,7 @@
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
+#include "infini_train/include/nn/parallel/reduce_op_type.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/optimizer.h"
@@ -97,9 +99,7 @@ void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
     CHECK_EQ(config.moe_config->num_experts % FLAGS_expert_parallel, 0)
         << "The number of Mixtral experts must be divisible by expert_parallel";
     if (FLAGS_expert_parallel > 1 && nn::parallel::global::GetExpertDataParallelSize() > 1) {
-        CHECK_EQ(FLAGS_zero_stage, 1)
-            << "The initial EP+EDP training path requires --zero_stage=1 so every expert replica participates "
-               "in gradient synchronization, including replicas with no routed tokens";
+        CHECK_LE(FLAGS_zero_stage, 1) << "EP+EDP currently supports ZeRO-0/1; sparse-expert ZeRO-2 is not validated";
     }
 
     const uint64_t batch_per_micro_step
@@ -189,6 +189,7 @@ void Train(const nn::parallel::Rank &rank) {
                                                    model_config.GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{};
+            // Unused experts may never signal readiness; finalize all buckets in a fixed order.
             ddp_config.overlap_grad_reduce = false;
             ddp_config.zero_stage = FLAGS_zero_stage;
             auto *mutable_chunks = dynamic_cast<PipelineParallel *>(model.get())->mutable_chunks();
@@ -199,6 +200,7 @@ void Train(const nn::parallel::Rank &rank) {
         }
     } else if (ddp_world_size > 1) {
         auto ddp_config = DistributedDataParallelConfig{};
+        // Unused experts may never signal readiness; finalize all buckets in a fixed order.
         ddp_config.overlap_grad_reduce = false;
         ddp_config.zero_stage = FLAGS_zero_stage;
         model = std::make_shared<DistributedDataParallel>(model, rank, ddp_config);
@@ -261,6 +263,14 @@ void Train(const nn::parallel::Rank &rank) {
             }
             nn::parallel::FinalizeModelGrads({model});
             optimizer->Step();
+        }
+
+        if (ddp_world_size > 1) {
+            auto loss_tensor = std::make_shared<Tensor>(&lossf, std::vector<int64_t>{}, DataType::kFLOAT32, device);
+            const auto *dp_group
+                = ProcessGroupFactory::Instance(device.type())->Get(GetDataParallelProcessGroupName(rank.GlobalRank()));
+            comm::AllReduce(loss_tensor, comm::ReduceOpType::kAvg, dp_group);
+            lossf = static_cast<const float *>(loss_tensor->To(Device()).DataPtr())[0];
         }
 
         device_impl->SynchronizeDevice(device);

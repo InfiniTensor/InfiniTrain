@@ -47,7 +47,11 @@ public:
     const std::vector<std::shared_ptr<ParamAndGradBucketGroup>> &bucket_groups() const;
 
 private:
+    // Dense parameters synchronize over DP; sharded expert parameters over EDP.
+    // A null group denotes a single replica, which still needs gradient scaling.
     const ProcessGroup *ProcessGroupForParameter(bool is_expert_parallel) const;
+    // Normalize both domains by dense DP size: each expert has already accumulated
+    // contributions from the EP ranks during dispatch/combine backward.
     float GradientScalingFactorForParameter(bool is_expert_parallel) const;
     void BuildParamAndGradBuffers(const std::vector<std::shared_ptr<Tensor>> &params);
     void RegisterBackwardHooks(const std::vector<std::shared_ptr<Tensor>> &params);
@@ -58,6 +62,9 @@ private:
     // Whether to enable grad sync on last microbatch (DDP naive path)
     std::shared_ptr<std::atomic_bool> is_last_microbatch_ = std::make_shared<std::atomic_bool>(true);
     std::vector<std::shared_ptr<Reducer>> reducers_;
+    // EP ZeRO-0: fixed-order finalization also covers experts with no routed tokens.
+    std::vector<std::shared_ptr<Tensor>> deferred_sync_params_;
+    bool deferred_sync_pending_ = false;
 
     DistributedDataParallelConfig ddp_config_;
     const ProcessGroup *dense_dp_pg_ = nullptr;

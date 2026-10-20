@@ -29,7 +29,6 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
-#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::lora {
@@ -181,15 +180,16 @@ LoRATensorSharding GetLoRATensorSharding(const std::unordered_map<std::string, L
 
 bool IsPrimarySaveTPGroupRank() {
     const int global_rank = parallel::global::thread_global_rank;
-    const auto dp_group_ranks = parallel::GetDataParallelGroupRanks(global_rank);
-    const auto pp_group_ranks = parallel::GetPipelineParallelGroupRanks(global_rank);
-    return global_rank == dp_group_ranks.front() && global_rank == pp_group_ranks.front();
+    int dp, tp, pp, ep;
+    parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep);
+    return dp == 0 && pp == 0;
 }
 
 bool IsSaveWriterRank() {
     const int global_rank = parallel::global::thread_global_rank;
-    const auto tp_group_ranks = parallel::GetTensorParallelGroupRanks(global_rank);
-    return IsPrimarySaveTPGroupRank() && global_rank == tp_group_ranks.front();
+    int dp, tp, pp, ep;
+    parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep);
+    return dp == 0 && tp == 0 && pp == 0;
 }
 
 std::shared_ptr<Tensor>
