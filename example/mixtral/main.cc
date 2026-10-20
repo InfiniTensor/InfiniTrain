@@ -98,9 +98,7 @@ void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
     CHECK(config.moe_config.has_value());
     CHECK_EQ(config.moe_config->num_experts % FLAGS_expert_parallel, 0)
         << "The number of Mixtral experts must be divisible by expert_parallel";
-    if (FLAGS_expert_parallel > 1 && nn::parallel::global::GetExpertDataParallelSize() > 1) {
-        CHECK_LE(FLAGS_zero_stage, 1) << "EP+EDP currently supports ZeRO-0/1; sparse-expert ZeRO-2 is not validated";
-    }
+    CHECK_LE(FLAGS_zero_stage, 2) << "Mixtral supports ZeRO-0/1/2";
 
     const uint64_t batch_per_micro_step
         = static_cast<uint64_t>(FLAGS_micro_batch_size) * nn::parallel::global::GetDataParallelSize();
@@ -189,6 +187,7 @@ void Train(const nn::parallel::Rank &rank) {
                                                    model_config.GetChunkSize());
         if (ddp_world_size > 1) {
             auto ddp_config = DistributedDataParallelConfig{};
+            ddp_config.handle_unused_parameters = true;
             // Unused experts may never signal readiness; finalize all buckets in a fixed order.
             ddp_config.overlap_grad_reduce = false;
             ddp_config.zero_stage = FLAGS_zero_stage;
@@ -200,6 +199,7 @@ void Train(const nn::parallel::Rank &rank) {
         }
     } else if (ddp_world_size > 1) {
         auto ddp_config = DistributedDataParallelConfig{};
+        ddp_config.handle_unused_parameters = true;
         // Unused experts may never signal readiness; finalize all buckets in a fixed order.
         ddp_config.overlap_grad_reduce = false;
         ddp_config.zero_stage = FLAGS_zero_stage;

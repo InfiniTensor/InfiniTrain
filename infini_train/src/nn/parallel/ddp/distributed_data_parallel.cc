@@ -44,7 +44,9 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
             = process_group_factory->GetOrCreate(GetDataParallelProcessGroupName(rank.GlobalRank()), dense_dp_ranks);
     }
     const auto expert_dp_ranks = GetExpertDataParallelGroupRanks(rank.GlobalRank());
-    if (expert_dp_ranks.size() > 1) {
+    if (expert_dp_ranks == dense_dp_ranks) {
+        expert_dp_pg_ = dense_dp_pg_;
+    } else if (expert_dp_ranks.size() > 1) {
         expert_dp_pg_ = process_group_factory->GetOrCreate(GetExpertDataParallelProcessGroupName(rank.GlobalRank()),
                                                            expert_dp_ranks);
     }
@@ -71,17 +73,26 @@ DistributedDataParallel::DistributedDataParallel(std::shared_ptr<nn::Module> mod
 
     // Sparse expert routing may omit hooks entirely. Synchronize the complete
     // parameter list once, after all microbatches, instead of from backward hooks.
-    if (ddp_config.zero_stage == 0
-        && std::any_of(trainable_params.begin(), trainable_params.end(),
-                       [](const auto &param) { return param->is_expert_parallel(); })) {
+    const bool may_have_unused_params = ddp_config.handle_unused_parameters
+                                     || std::any_of(trainable_params.begin(), trainable_params.end(),
+                                                    [](const auto &param) { return param->is_expert_parallel(); });
+    if (may_have_unused_params) {
+        CHECK_LE(ddp_config.zero_stage, 2) << "Unused parameters currently require ZeRO-0/1/2.";
+        CHECK(!ddp_config.overlap_grad_reduce)
+            << "Unused parameters require overlap_grad_reduce=false to preserve collective ordering.";
+    }
+    if (ddp_config.zero_stage == 0 && may_have_unused_params) {
+        // TODO(dcj): Preserve gradient bucketing for dense parameters and use deferred
+        // synchronization only for sparse expert parameters to reduce communication overhead.
         deferred_sync_params_ = trainable_params;
     }
     for (auto &param : trainable_params) {
-        if (deferred_sync_params_.empty() && !ddp_config.gradient_bucketing_enabled && ddp_config.zero_stage < 1) {
+        if (dense_dp_pg_ && deferred_sync_params_.empty() && !ddp_config.gradient_bucketing_enabled
+            && ddp_config.zero_stage < 1) {
             const auto reduce_op
                 = ddp_config_.average_in_collective ? comm::ReduceOpType::kAvg : comm::ReduceOpType::kSum;
-            auto hook
-                = std::make_unique<autograd::AllReducePostAccumulateHook>(reduce_op, dense_dp_pg_, is_last_microbatch_);
+            auto hook = std::make_unique<autograd::AllReducePostAccumulateHook>(
+                reduce_op, dense_dp_pg_, is_last_microbatch_, GradientScalingFactorForParameter(false));
             param->RegisterPostAccumulateGradHook(std::move(hook));
         }
     }
@@ -297,6 +308,9 @@ void DistributedDataParallel::FinishGradSync() {
         return;
     }
     if (deferred_sync_pending_) {
+        // TODO: bucket deferred reductions while preserving a fixed collective order.
+        // Sparse ZeRO-0 currently synchronizes per parameter, ignoring gradient
+        // bucketing options, so unused experts cannot leave a bucket incomplete.
         for (const auto &param : deferred_sync_params_) {
             auto grad = param->grad();
             if (!grad) {

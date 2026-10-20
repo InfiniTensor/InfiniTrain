@@ -40,7 +40,8 @@ class AllReducePostAccumulateHook : public PostAccumulateGradHook {
 public:
     AllReducePostAccumulateHook(infini_train::nn::parallel::comm::ReduceOpType reduce_op,
                                 const infini_train::nn::parallel::ProcessGroup *pg = nullptr,
-                                std::shared_ptr<const std::atomic_bool> enabled = nullptr);
+                                std::shared_ptr<const std::atomic_bool> enabled = nullptr,
+                                float gradient_scaling_factor = 1.f);
 
     void operator()(const std::shared_ptr<Tensor> &tensor) override;
 
@@ -48,5 +49,6 @@ private:
     infini_train::nn::parallel::comm::ReduceOpType reduce_op_;
     const infini_train::nn::parallel::ProcessGroup *pg_ = nullptr;
     std::shared_ptr<const std::atomic_bool> enabled_;
+    float gradient_scaling_factor_ = 1.f;
 };
 } // namespace infini_train::autograd
