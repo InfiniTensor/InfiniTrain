@@ -11,7 +11,7 @@
 
 namespace infini_train::checkpoint {
 struct WriteItem;
-} // namespace infini_train::checkpoint
+}  // namespace infini_train::checkpoint
 
 namespace infini_train {
 class Optimizer;

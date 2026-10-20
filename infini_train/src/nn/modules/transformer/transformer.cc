@@ -8,7 +8,6 @@
 #include <ostream>
 #include <string>
 #include <unordered_map>
-#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -456,46 +455,19 @@ TransformerModel::TransformerModel(const TransformerConfig config)
 }
 
 ShardedStateDict TransformerModel::BuildShardedStateDict(
-    const std::string &prefix) const {
-  auto state = Module::BuildShardedStateDict(prefix);
+    const ShardedStateDictBuildContext &context) const {
+  auto state = Module::BuildShardedStateDict(context);
   if (stage_info_.is_last_stage) {
     const auto lm_head_prefix =
-        prefix.empty() ? TransformerLastStage::kLMHeadLayerName
-                       : prefix + "." + TransformerLastStage::kLMHeadLayerName;
+        context.logical_prefix.empty()
+            ? TransformerLastStage::kLMHeadLayerName
+            : context.logical_prefix + "." +
+                  TransformerLastStage::kLMHeadLayerName;
     const auto weight_key =
         lm_head_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
     state.tensors.at(weight_key).allow_shape_mismatch = true;
   }
   return state;
-}
-
-std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
-TransformerModel::NamedParameters(const std::string &prefix, bool recurse,
-                                  bool remove_duplicate) const {
-  if (!recurse) {
-    return Module::NamedParameters(prefix, false, remove_duplicate);
-  }
-
-  // Select public aliases so optimizer state keys match ShardedStateDict keys.
-  auto parameters = Module::NamedParameters(prefix, true, false);
-  const auto sharded_state = BuildShardedStateDict(prefix);
-
-  std::vector<std::pair<std::string, std::shared_ptr<Tensor>>> result;
-  std::unordered_set<const Tensor *> visited;
-  const auto private_pipeline_prefix =
-      prefix.empty() ? "__pp" : prefix + ".__pp";
-  for (auto &[name, parameter] : parameters) {
-    if (name.starts_with(private_pipeline_prefix)) {
-      continue;
-    }
-    CHECK(sharded_state.tensors.contains(name))
-        << "Parameter is missing from sharded state dict: " << name;
-    if (remove_duplicate && !visited.insert(parameter.get()).second) {
-      continue;
-    }
-    result.emplace_back(std::move(name), std::move(parameter));
-  }
-  return result;
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(

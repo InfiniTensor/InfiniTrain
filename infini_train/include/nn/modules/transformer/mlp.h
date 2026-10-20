@@ -1,7 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -13,6 +12,7 @@ struct TransformerConfig;
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "MLP";
   static constexpr char kCFcLayerName[] = "c_fc";
   static constexpr char kGeluLayerName[] = "gelu";
@@ -20,12 +20,12 @@ class MLP : public infini_train::nn::CloneableModule<MLP> {
 
   static constexpr char kSwiGLULayerName[] = "swiglu";
 
-  explicit MLP(const TransformerConfig &config);
+  explicit MLP(const TransformerConfig &config, bool is_expert = false);
 
   std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
   ShardedStateDict BuildShardedStateDict(
-      const std::string &prefix = "") const override;
+      const ShardedStateDictBuildContext &context) const override;
 };
 }  // namespace infini_train::nn

@@ -1,8 +1,6 @@
 #pragma once
 
 #include <memory>
-#include <string>
-#include <utility>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -74,6 +72,7 @@ class TransformerLastStage : public CloneableModule<TransformerLastStage> {
 
 class TransformerModel : public CloneableModule<TransformerModel> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "Transformer";
   static constexpr char kTransformerModelName[] = "transformer";
 
@@ -84,9 +83,8 @@ class TransformerModel : public CloneableModule<TransformerModel> {
 
   const TransformerConfig &Config() const;
 
-    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
-    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   const TransformerConfig config_;

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "glog/logging.h"
+
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/autograd/linear.h"
 #include "infini_train/include/autograd/sparse.h"
@@ -357,13 +358,19 @@ bool ColumnParallelLinear::sequence_parallel() const {
 }
 
 ShardedStateDict ColumnParallelLinear::BuildShardedStateDict(
-    const std::string &prefix) const {
+    const ShardedStateDictBuildContext &context) const {
   ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
   ShardedTensor w;
-  w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+  w.key = context.logical_prefix.empty()
+              ? kParamWeightName
+              : context.logical_prefix + "." + kParamWeightName;
+  w.local_key = context.local_prefix.empty()
+                    ? kParamWeightName
+                    : context.local_prefix + "." + kParamWeightName;
+  w.local_tensor = weight.get();
   w.dtype = weight->Dtype();
   w.global_shape = {output_size_per_partition_ * tp_size, weight->Dims()[1]};
   w.local_shape = weight->Dims();
@@ -375,7 +382,13 @@ ShardedStateDict ColumnParallelLinear::BuildShardedStateDict(
   if (bias_) {
     auto &bias = parameter(kParamBiasName);
     ShardedTensor b;
-    b.key = prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+    b.key = context.logical_prefix.empty()
+                ? kParamBiasName
+                : context.logical_prefix + "." + kParamBiasName;
+    b.local_key = context.local_prefix.empty()
+                      ? kParamBiasName
+                      : context.local_prefix + "." + kParamBiasName;
+    b.local_tensor = bias.get();
     b.dtype = bias->Dtype();
     b.global_shape = {
         static_cast<int64_t>(output_size_per_partition_ * tp_size)};
@@ -467,13 +480,19 @@ bool RowParallelLinear::skip_bias_add() const { return skip_bias_add_; }
 bool RowParallelLinear::sequence_parallel() const { return sequence_parallel_; }
 
 ShardedStateDict RowParallelLinear::BuildShardedStateDict(
-    const std::string &prefix) const {
+    const ShardedStateDictBuildContext &context) const {
   ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
   ShardedTensor w;
-  w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+  w.key = context.logical_prefix.empty()
+              ? kParamWeightName
+              : context.logical_prefix + "." + kParamWeightName;
+  w.local_key = context.local_prefix.empty()
+                    ? kParamWeightName
+                    : context.local_prefix + "." + kParamWeightName;
+  w.local_tensor = weight.get();
   w.dtype = weight->Dtype();
   w.global_shape = {weight->Dims()[0], input_size_per_partition_ * tp_size};
   w.local_shape = weight->Dims();
@@ -484,9 +503,14 @@ ShardedStateDict RowParallelLinear::BuildShardedStateDict(
   // Bias is NOT sharded in RowParallelLinear
   if (bias_) {
     auto &bias = parameter(kParamBiasName);
-    const auto key =
-        prefix.empty() ? kParamBiasName : prefix + "." + kParamBiasName;
+    const auto key = context.logical_prefix.empty()
+                         ? kParamBiasName
+                         : context.logical_prefix + "." + kParamBiasName;
     auto b = MakeShardedTensor(key, bias->Dtype(), bias->Dims());
+    b.local_key = context.local_prefix.empty()
+                      ? kParamBiasName
+                      : context.local_prefix + "." + kParamBiasName;
+    b.local_tensor = bias.get();
     sd.tensors[b.key] = std::move(b);
   }
 
@@ -563,13 +587,19 @@ std::vector<std::shared_ptr<Tensor>> VocabParallelEmbedding::Forward(
 }
 
 ShardedStateDict VocabParallelEmbedding::BuildShardedStateDict(
-    const std::string &prefix) const {
+    const ShardedStateDictBuildContext &context) const {
   ShardedStateDict sd;
   int tp_size = global::GetTensorParallelSize();
 
   auto &weight = parameter(kParamWeightName);
   ShardedTensor w;
-  w.key = prefix.empty() ? kParamWeightName : prefix + "." + kParamWeightName;
+  w.key = context.logical_prefix.empty()
+              ? kParamWeightName
+              : context.logical_prefix + "." + kParamWeightName;
+  w.local_key = context.local_prefix.empty()
+                    ? kParamWeightName
+                    : context.local_prefix + "." + kParamWeightName;
+  w.local_tensor = weight.get();
   w.dtype = weight->Dtype();
   w.global_shape = {vocab_size_global_, embedding_dim_};
   w.local_shape = weight->Dims();

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "glog/logging.h"
+
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/checkpoint/constants.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -18,7 +19,7 @@
 #include "infini_train/include/nn/parallel/rank.h"
 #include "infini_train/include/optimizer.h"
 
-    using namespace infini_train;
+using namespace infini_train;
 namespace nn = infini_train::nn;
 
 namespace {
