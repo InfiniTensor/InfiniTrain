@@ -69,6 +69,8 @@ std::vector<std::shared_ptr<Tensor>> SequentialMLP::Forward(const std::vector<st
         if (autocast_context.enabled) {
             output_dtype = autocast_context.autocast_dtype;
         }
+        // Match the normal expert output after multiplication by router probabilities.
+        output_dtype = PromoteDataTypes(output_dtype, permuted_probs->Dtype());
         permuted_expert_output
             = std::make_shared<Tensor>(permuted_input->Dims(), output_dtype, permuted_input->GetDevice());
     } else {

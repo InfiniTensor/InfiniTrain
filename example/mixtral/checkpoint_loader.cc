@@ -1,9 +1,7 @@
 #include "example/mixtral/checkpoint_loader.h"
 
-#include <algorithm>
 #include <cstdint>
 #include <fstream>
-#include <iterator>
 #include <memory>
 #include <optional>
 #include <string>
@@ -15,7 +13,6 @@
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/global.h"
-#include "infini_train/include/nn/parallel/utils.h"
 #include "infini_train/include/tensor.h"
 
 #include "example/common/utils.h"
@@ -149,12 +146,9 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(const std::string &filepath,
     const int64_t expert_parallel_size = infini_train::nn::parallel::global::GetExpertParallelSize();
     CHECK_EQ(moe_config.num_experts % expert_parallel_size, 0);
     const int64_t num_local_experts = moe_config.num_experts / expert_parallel_size;
-    const auto expert_ranks = infini_train::nn::parallel::GetExpertParallelGroupRanks(
-        infini_train::nn::parallel::global::thread_global_rank);
-    const auto rank_it
-        = std::find(expert_ranks.begin(), expert_ranks.end(), infini_train::nn::parallel::global::thread_global_rank);
-    CHECK(rank_it != expert_ranks.end());
-    const int64_t expert_parallel_rank = std::distance(expert_ranks.begin(), rank_it);
+    int dp, tp, pp, expert_parallel_rank;
+    infini_train::nn::parallel::global::GetExpertRankGenerator().CoordOf(
+        infini_train::nn::parallel::global::thread_global_rank, dp, tp, pp, expert_parallel_rank);
     const int64_t first_local_expert = expert_parallel_rank * num_local_experts;
     const int64_t last_local_expert = first_local_expert + num_local_experts;
 

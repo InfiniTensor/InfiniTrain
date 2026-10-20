@@ -148,6 +148,7 @@ Tensor Tensor::To(Device device) {
         auto new_tensor = Tensor(*this, 0, dims_);
         new_tensor.requires_grad_ = requires_grad_;
         new_tensor.sequence_parallel_ = sequence_parallel_;
+        new_tensor.is_expert_parallel_ = is_expert_parallel_;
         if (grad_) {
             new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }
@@ -200,6 +201,7 @@ Tensor Tensor::To(DataType dtype) {
         auto new_tensor = Tensor(*this, 0, dims_);
         new_tensor.requires_grad_ = requires_grad_;
         new_tensor.sequence_parallel_ = sequence_parallel_;
+        new_tensor.is_expert_parallel_ = is_expert_parallel_;
         if (grad_) {
             new_tensor.grad_ = std::make_unique<Tensor>(*grad_.get(), 0, grad_->dims_);
         }

@@ -1,7 +1,5 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 
-#include <algorithm>
-#include <iterator>
 #include <memory>
 #include <numeric>
 #include <ostream>
@@ -26,10 +24,8 @@ namespace infini_train::nn::moe {
 namespace {
 
 std::vector<int64_t> LocalExpertIds(int64_t num_local_experts, int global_rank) {
-    const auto expert_ranks = parallel::GetExpertParallelGroupRanks(global_rank);
-    const auto rank_it = std::find(expert_ranks.begin(), expert_ranks.end(), global_rank);
-    CHECK(rank_it != expert_ranks.end());
-    const int64_t ep_rank = std::distance(expert_ranks.begin(), rank_it);
+    int dp, tp, pp, ep_rank;
+    parallel::global::GetExpertRankGenerator().CoordOf(global_rank, dp, tp, pp, ep_rank);
     const int64_t local_expert_start = ep_rank * num_local_experts;
     std::vector<int64_t> local_expert_ids(num_local_experts);
     std::iota(local_expert_ids.begin(), local_expert_ids.end(), local_expert_start);
