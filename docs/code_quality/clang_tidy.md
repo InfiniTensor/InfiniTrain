@@ -43,18 +43,23 @@ CheckOptions:
 
 ### 标识符命名
 
-`readability-identifier-naming` 是 clang-tidy 内置规则，本项目首期使用它演示如何优先复用现成规则，避免为已有能力编写
-自定义检查。当前配置为：
+`readability-identifier-naming` 是 clang-tidy 内置规则。当前仅配置枚举项（枚举常量）的命名：
 
 ```yaml
 CheckOptions:
-  readability-identifier-naming.FunctionCase: CamelCase
-  readability-identifier-naming.MethodCase: CamelCase
-  readability-identifier-naming.VariableCase: lower_case
+  readability-identifier-naming.EnumConstantCase: CamelCase
+  readability-identifier-naming.EnumConstantPrefix: k
 ```
 
-自由函数和成员函数使用 `CamelCase`，变量使用 `lower_case`。命名规则只报告问题，不自动修改代码，避免跨声明和调用位置的
-批量重命名影响代码语义或对外接口。
+枚举项使用 `k` 前缀，后面的名称采用 `CamelCase`，例如 `kFloat32`、`kCpu`。该配置适用于普通 `enum`
+和 `enum class` 的枚举项，不规定枚举类型本身的名称。
+
+```cpp
+enum class DeviceType {
+  kCpu,
+  kCuda,
+};
+```
 
 ## CI 检查
 
