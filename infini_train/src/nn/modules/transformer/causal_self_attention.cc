@@ -12,6 +12,7 @@
 #include <vector>
 
 #include "glog/logging.h"
+
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/normalization.h"
@@ -107,8 +108,8 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
 }
 
 ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
-    const std::string &prefix) const {
-  auto state = Module::BuildShardedStateDict(prefix);
+    const ShardedStateDictBuildContext &context) const {
+  auto state = Module::BuildShardedStateDict(context);
   const int tp_size = parallel::global::GetTensorParallelSize();
   const int rank = parallel::tp_rank;
   const int64_t q_global = n_head_ * head_dim_;
@@ -120,7 +121,9 @@ ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
   // Move the packed-QKV segment layout into a dedicated sharding abstraction
   // shared by the base attention weight and LoRA parameters.
   const auto c_attn_prefix =
-      prefix.empty() ? kCAttnLayerName : prefix + "." + kCAttnLayerName;
+      context.logical_prefix.empty()
+          ? kCAttnLayerName
+          : context.logical_prefix + "." + kCAttnLayerName;
   auto set_qkv_segments = [&](const std::string &parameter_name) {
     const auto key = c_attn_prefix + "." + parameter_name;
     auto it = state.tensors.find(key);

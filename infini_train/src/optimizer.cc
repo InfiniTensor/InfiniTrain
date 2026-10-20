@@ -3,6 +3,7 @@
 #include <stddef.h>
 
 #include <ostream>
+#include <string>
 #include <unordered_map>
 #include <vector>
 
@@ -43,6 +44,17 @@ void Optimizer::ZeroGrad(bool set_to_none) {
 std::unordered_map<std::string, std::shared_ptr<Tensor>> Optimizer::StateDict()
     const {
   return {};
+}
+
+NamedParameterList Optimizer::NamedParameters() const {
+  NamedParameterList result;
+  result.reserve(params_.size());
+  for (size_t i = 0; i < params_.size(); ++i) {
+    result.emplace_back(
+        parameter_names_.empty() ? std::to_string(i) : parameter_names_[i],
+        params_[i]);
+  }
+  return result;
 }
 
 void Optimizer::set_learning_rate(float lr) { learning_rate_ = lr; }

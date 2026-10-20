@@ -36,6 +36,8 @@ class Optimizer {
   virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
       const;
 
+  NamedParameterList NamedParameters() const;
+
   virtual void LoadStateDict(
       const std::unordered_map<std::string, std::shared_ptr<Tensor>>
           &state_dict) {}

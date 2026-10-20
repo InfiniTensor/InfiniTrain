@@ -209,6 +209,28 @@ T ExtractNumberField(const std::string &content, const std::string &key,
   return value;
 }
 
+std::unordered_map<std::string, std::shared_ptr<Tensor>>
+MapCheckpointStateToLocal(
+    const ShardedStateDict &target,
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &global_state) {
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> local_state;
+  for (const auto &[key, info] : target.tensors) {
+    CHECK(!info.local_key.empty())
+        << "Empty checkpoint local_key for key=" << key;
+    const auto source = global_state.find(key);
+    CHECK(source != global_state.end())
+        << "Missing resharded checkpoint tensor: key=" << key
+        << ", local_key=" << info.local_key;
+    CHECK(local_state.emplace(info.local_key, source->second).second)
+        << "Ambiguous checkpoint local_key: key=" << key
+        << ", local_key=" << info.local_key;
+  }
+  CHECK_EQ(global_state.size(), target.tensors.size())
+      << "Resharded checkpoint result contains unexpected tensors";
+  return local_state;
+}
+
 void SynchronizeCheckpointRanks(const nn::Module &model) {
   if (nn::parallel::global::GetWorldSize() == 1) {
     return;
@@ -250,7 +272,7 @@ void Checkpoint::Save(const std::filesystem::path &checkpoint_dir,
     if (optimizer != nullptr) {
       optimizer_state = optimizer->StateDict();
       sharded_state.Merge(checkpoint::BuildOptimizerShardedStateDict(
-          sharded_state, optimizer_state));
+          sharded_state, optimizer_state, optimizer->NamedParameters()));
     }
     const auto write_items =
         checkpoint::SavePlanner::Plan(sharded_state, global_rank);
@@ -303,7 +325,7 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
   auto result = strategy.Execute(
       checkpoint_dir,
       checkpoint::LoadPlanner::PlanReshard(metadata, model_sharded_state));
-  model.LoadStateDict(result);
+  model.LoadStateDict(MapCheckpointStateToLocal(model_sharded_state, result));
 
   const int current_tp = nn::parallel::global::GetTensorParallelSize();
   const int current_pp = nn::parallel::global::GetPipelineParallelSize();
@@ -316,10 +338,13 @@ void Checkpoint::Load(const std::filesystem::path &checkpoint_dir,
 
   if (optimizer != nullptr) {
     auto optimizer_sharded_state = checkpoint::BuildOptimizerShardedStateDict(
-        model_sharded_state, optimizer->StateDict());
+        model_sharded_state, optimizer->StateDict(),
+        optimizer->NamedParameters());
     auto optimizer_plan =
         checkpoint::LoadPlanner::PlanReshard(metadata, optimizer_sharded_state);
-    optimizer->LoadStateDict(strategy.Execute(checkpoint_dir, optimizer_plan));
+    auto optimizer_result = strategy.Execute(checkpoint_dir, optimizer_plan);
+    optimizer->LoadStateDict(
+        MapCheckpointStateToLocal(optimizer_sharded_state, optimizer_result));
   }
   if (lr_scheduler != nullptr &&
       std::filesystem::exists(checkpoint_dir /
@@ -511,12 +536,14 @@ void Checkpoint::SaveLocalShard(
       if (key.starts_with(optimizers::kAdamOptimizerPrefix)) {
         continue;
       }
-      // Match metadata keys to the local tensor payloads.
-      const auto &local_key = info.local_key.empty() ? key : info.local_key;
-      auto it = state_dict.find(local_key);
-      if (it != state_dict.end()) {
-        filtered_sd.emplace(key, it->second);
-      }
+      CHECK(!info.local_key.empty())
+          << "Empty model checkpoint local_key: key=" << key;
+      auto it = state_dict.find(info.local_key);
+      CHECK(it != state_dict.end())
+          << "Missing model checkpoint tensor: key=" << key
+          << ", local_key=" << info.local_key;
+      CHECK(filtered_sd.emplace(key, it->second).second)
+          << "Duplicate model checkpoint payload key: " << key;
     }
     if (!filtered_sd.empty()) {
       model_file_index = SaveStateDict(
@@ -524,11 +551,29 @@ void Checkpoint::SaveLocalShard(
     }
   }
 
-  // Save the rank-local optimizer state.
+  // Save optimizer tensors under stable global keys while reading the
+  // optimizer's ordinary local keys.
   if (!optimizer_state.empty()) {
+    std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        global_optimizer_state;
+    for (const auto &[key, info] : sharded_sd.tensors) {
+      if (!key.starts_with(optimizers::kAdamOptimizerPrefix)) {
+        continue;
+      }
+      CHECK(!info.local_key.empty())
+          << "Empty optimizer checkpoint local_key: key=" << key;
+      const auto local = optimizer_state.find(info.local_key);
+      CHECK(local != optimizer_state.end())
+          << "Missing optimizer checkpoint tensor: key=" << key
+          << ", local_key=" << info.local_key;
+      CHECK(global_optimizer_state.emplace(key, local->second).second)
+          << "Duplicate optimizer checkpoint payload key: " << key;
+    }
+    CHECK_EQ(global_optimizer_state.size(), optimizer_state.size())
+        << "Optimizer state contains tensors absent from checkpoint metadata";
     optimizer_file_index =
         SaveStateDict(checkpoint_dir / checkpoint::kOptimizerCheckpointFilename,
-                      optimizer_state);
+                      global_optimizer_state);
   }
 
   // Write the temporary rank manifest.

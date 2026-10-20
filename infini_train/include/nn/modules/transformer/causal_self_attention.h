@@ -1,8 +1,8 @@
 #pragma once
 
-#include <memory>
 #include <stdint.h>
-#include <string>
+
+#include <memory>
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
@@ -15,6 +15,7 @@ namespace infini_train::nn {
 class CausalSelfAttention
     : public infini_train::nn::CloneableModule<CausalSelfAttention> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "CausalSelfAttention";
   static constexpr char kCAttnLayerName[] = "c_attn";
   static constexpr char kCProjLayerName[] = "c_proj";
@@ -29,7 +30,8 @@ class CausalSelfAttention
   std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
-    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   TransformerConfig config_;

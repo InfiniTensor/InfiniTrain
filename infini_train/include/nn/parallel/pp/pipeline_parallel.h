@@ -1,10 +1,9 @@
 // pipeline_parallel.h
 #pragma once
 
-#include <memory>
 #include <stdint.h>
-#include <string>
-#include <unordered_map>
+
+#include <memory>
 #include <utility>
 #include <vector>
 
@@ -35,6 +34,7 @@ struct StageInfo {
 
 class PipelineParallel : public Module {
  public:
+  using Module::BuildShardedStateDict;
   PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages,
                    int num_micro_batches,
                    const std::vector<std::vector<int64_t>> &recv_shape,
@@ -51,11 +51,8 @@ class PipelineParallel : public Module {
 
   std::vector<std::shared_ptr<Module>> *mutable_chunks();
 
-    std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict() const override;
-    std::vector<std::pair<std::string, std::shared_ptr<Tensor>>>
-    NamedParameters(const std::string &prefix = "", bool recurse = true, bool remove_duplicate = true) const override;
-    ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const override;
-    void LoadStateDict(const std::unordered_map<std::string, std::shared_ptr<Tensor>> &state_dict) override;
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape,

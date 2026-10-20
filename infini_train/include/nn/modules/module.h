@@ -1,8 +1,9 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <functional>
 #include <memory>
-#include <stdint.h>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -23,6 +24,11 @@ enum class DataType : int8_t;
 
 namespace infini_train::nn {
 class Module;
+
+struct ShardedStateDictBuildContext {
+  std::string logical_prefix;
+  std::string local_prefix;
+};
 
 class NoSyncGuard {
  public:
@@ -87,9 +93,12 @@ class Module : public std::enable_shared_from_this<Module> {
   virtual std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
       const;
 
-  // Return state-dict metadata with global shard coordinates.
+  // Return state-dict metadata with global shard coordinates. The public prefix
+  // is rooted in both the logical checkpoint namespace and this module's
+  // ordinary StateDict namespace.
+  ShardedStateDict BuildShardedStateDict(const std::string &prefix = "") const;
   virtual ShardedStateDict BuildShardedStateDict(
-      const std::string &prefix = "") const;
+      const ShardedStateDictBuildContext &context) const;
 
   // Current behavior: missing keys / shape / dtype mismatches are FATAL errors;
   // unexpected keys in state_dict are WARNING-only and silently ignored.
