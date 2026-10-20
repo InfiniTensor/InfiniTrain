@@ -20,7 +20,7 @@
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
         "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,recompute",
         "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,recompute",
-        "QWEN3_TEST_GROUPS": "qwen3",
+        "QWEN3_TEST_GROUPS": "qwen3,qwen3_8_proc",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
     "basic_compile_commands": [
@@ -1172,6 +1172,102 @@
                     "args": {
                         "dtype": "bfloat16",
                         "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 20,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "qwen3_8_proc",
+            "infini_run_args": {
+                "nproc_per_node": 8
+            },
+            "tests": [
+                {
+                    "id": "tp8_fp32_8proc",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_bfloat16_8proc",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_sp_fp32_8proc",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8,
+                        "sequence_parallel": true
+                    }
+                },
+                {
+                    "id": "pp8_fp32_8proc",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "pipeline_parallel": 8
+                    }
+                },
+                {
+                    "id": "tp8_lora_bfloat16_8proc",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 1,
+                        "total_batch_size": 64,
+                        "tensor_parallel": 8,
+                        "lora_rank": 8,
+                        "lora_alpha": 16.0,
+                        "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2",
+                        "lora_load_path": "$QWEN3_LORA_WEIGHTS_DIR"
+                    }
+                },
+                {
+                    "id": "3d_ddp_tp2_pp2_fp32_8proc",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 1,
+                        "num_iteration": 10,
+                        "batch_size": 20,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2
+                    }
+                },
+                {
+                    "id": "3d_ddp_tp2_pp2_bf16_8proc",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 1,
                         "num_iteration": 10,
                         "batch_size": 20,
                         "total_batch_size": 5120,

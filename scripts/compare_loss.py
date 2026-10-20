@@ -13,7 +13,8 @@ from compare_utils import collect_log_files, exit_if_duplicate_logs
 
 def get_dtype_from_filename(filename):
     """Determine dtype from filename. Returns 'bfloat16' or 'fp32'."""
-    return 'bfloat16' if '_bfloat16' in filename else 'fp32'
+    bf16_suffix = re.search(r'_(?:bfloat16|bf16)(?:_|\.|$)', filename)
+    return 'bfloat16' if bf16_suffix else 'fp32'
 
 def parse_log(file_path):
     """Extract step -> loss mapping from log file."""
