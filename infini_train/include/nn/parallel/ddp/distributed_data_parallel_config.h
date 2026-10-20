@@ -25,6 +25,13 @@ public:
     // Whether to enable gradient bucketing.
     bool gradient_bucketing_enabled = true;
 
+    // Handle unused parameters (e.g., sparsely routed MoE experts, even with EP=1).
+    // Does not traverse the autograd graph to detect unused parameters.
+    // Requires overlap_grad_reduce=false; supports ZeRO-0/1/2.
+    // ZeRO-0 synchronizes all gradients in a fixed order at FinishGradSync(),
+    // treating missing gradients as zero.
+    bool handle_unused_parameters = false;
+
     // ======================================================
     // DistributedOptimizer-related args
     // Ref:

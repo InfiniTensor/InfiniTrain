@@ -293,7 +293,19 @@ void ParamAndGradBucketGroup::StartGradSync() {
         if (ddp_config_.zero_stage >= 2) {
             auto full_grad_buffer = temp_full_grad_buffer_list_[i];
             if (!full_grad_buffer) {
-                continue;
+                CHECK(grad_shard_buffer_list_[i]) << "ParamAndGradBucketGroup: grad shard buffer missing.";
+                if (collective_pg_size_ == 1) {
+                    // The optimizer retains this shard across iterations.
+                    grad_shard_buffer_list_[i]->Fill(0.f);
+                    continue;
+                }
+                // Other replicas may have used this bucket. Contribute zeros to
+                // the same collective instead of skipping it or clearing only our shard.
+                CHECK(bucket->param_data());
+                full_grad_buffer = AllocateFlatBuffer(bucket->param_data()->NumElements(), bucket->grad_dtype(),
+                                                      bucket->param_data()->GetDevice());
+                full_grad_buffer->Fill(0.f);
+                temp_full_grad_buffer_list_[i] = full_grad_buffer;
             }
             if (bucket->gradient_scaling_factor() != 1.f) {
                 auto kernel

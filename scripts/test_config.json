@@ -1332,8 +1332,8 @@
                         "dtype": "float32",
                         "nthread_per_process": 2,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 40,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 0
@@ -1345,8 +1345,8 @@
                         "dtype": "bfloat16",
                         "nthread_per_process": 2,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 40,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 0
@@ -1358,8 +1358,8 @@
                         "dtype": "float32",
                         "nthread_per_process": 4,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 0
@@ -1371,8 +1371,8 @@
                         "dtype": "bfloat16",
                         "nthread_per_process": 4,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 0
@@ -1384,8 +1384,8 @@
                         "dtype": "float32",
                         "nthread_per_process": 4,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 1
@@ -1397,11 +1397,37 @@
                         "dtype": "bfloat16",
                         "nthread_per_process": 4,
                         "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
                         "sequence_length": 64,
                         "expert_parallel": 2,
                         "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "ep2_edp2_zero2_fp32",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
+                        "sequence_length": 64,
+                        "expert_parallel": 2,
+                        "zero_stage": 2
+                    }
+                },
+                {
+                    "id": "ep2_edp2_zero2_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 4,
+                        "num_iteration": 10,
+                        "micro_batch_size": 20,
+                        "global_batch_size": 80,
+                        "sequence_length": 64,
+                        "expert_parallel": 2,
+                        "zero_stage": 2
                     }
                 }
             ]

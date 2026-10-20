@@ -62,7 +62,7 @@ private:
     // Whether to enable grad sync on last microbatch (DDP naive path)
     std::shared_ptr<std::atomic_bool> is_last_microbatch_ = std::make_shared<std::atomic_bool>(true);
     std::vector<std::shared_ptr<Reducer>> reducers_;
-    // EP ZeRO-0: fixed-order finalization also covers experts with no routed tokens.
+    // Sparse ZeRO-0: fixed-order finalization also covers EP=1 with unused experts.
     std::vector<std::shared_ptr<Tensor>> deferred_sync_params_;
     bool deferred_sync_pending_ = false;
 
