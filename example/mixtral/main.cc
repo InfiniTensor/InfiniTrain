@@ -144,6 +144,9 @@ void Train(const nn::parallel::Rank &rank) {
         device = Device(device_type, 0);
     }
 
+    // Profiling runs before kernel-local guards; keep this rank's device current
+    // throughout training so its events and synchronization use the correct stream.
+    core::DeviceGuard device_guard(device);
     nn::TransformerConfig model_config = mixtral::TinyMixtralConfig();
     mixtral::SanitizeTinyMixtralConfig(model_config);
     ValidateRuntimeFlags(model_config);
