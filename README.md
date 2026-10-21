@@ -54,44 +54,49 @@ Build Options:
 
 ### ✔ Support Matrix
 
-| Category                  | Feature                         | Description                                          | Status         |
-| ------------------------- | ------------------------------- | ---------------------------------------------------- | -------------- |
-| Model Support             | GPT-2                           | Decoder-only Transformer language model              | ✔ Supported    |
-|                           | LLaMA 3                         | Modern LLaMA-family Transformer architecture         | ✔ Supported    |
-|                           | Qwen3-8B                        | Qwen3 8B language model with QK norm and GQA          | ✔ Supported    |
-|                           | DeepSeek-V3                     | Large-scale MoE-based language model                 | 🗓 Planned     |
-| Precision                 | Multiple Data Type              | FP32, BF16                                           | ✔ Supported    |
-|                           | Mixed Precision                 | Autocast-based BF16 compute with FP32 accumulation   | ✔ Supported    |
-| Distributed Training      | Data Parallel (DP)              | Parameter-server-style data parallelism              | ✔ Supported    |
-|                           | Distributed Data Parallel (DDP) | Collective-based data parallelism                    | ✔ Supported    |
-|                           | Tensor Parallelism (TP)         | Intra-layer tensor sharding                          | ✔ Supported    |
-|                           | Sequence Parallelism (SP)       | Sequence dimension sharding                          | ✔ Supported    |
-|                           | Pipeline Parallelism (PP)       | GPipe, 1F1B scheduling, Virtual Pipeline (vPP)       | ✔ Supported    |
-|                           | Hybrid Parallelism              | Arbitrary combination of DDP + TP + SP + PP          | ✔ Supported    |
-| Core Components           | Multi-backend                   | CPU and CUDA execution backends                      | ✔ Supported    |
-|                           | Multi-node Distributed Training | Distributed execution across multiple nodes          | ✔ Supported    |
-|                           | Transformer Abstraction         | Generic Transformer structure abstraction            | ✔ Supported    |
-|                           | Backend Registries              | Device / CCL / dtype abstraction and registration    | ✔ Supported    |
-|                           | Kernel Dispatcher               | Kernel registration and dynamic dispatch mechanism   | ✔ Supported    |
-|                           | Autograd                        | Automatic differentiation engine                     | ✔ Supported    |
-|                           | Autocast                        | Automatic mixed precision runtime                    | ✔ Supported    |
-|                           | Checkpointing                   | Training checkpoint save and restore                 | 🗓 Planned     |
-| Fine-tuning               | LoRA                            | Memory-efficient fine-tuning with merge / unmerge    | ✔ Supported    |
-| Memory Optimizations      | ZeRO Stage-1                    | Sharded optimizer states for DDP                     | ✔ Supported    |
-|                           | ZeRO Stage-2                    | Sharded gradients across DDP ranks                   | ✔ Supported    |
-|                           | Activation Recomputation        | Recompute activations to reduce memory usage         | 🗓 Planned     |
-| Performance Optimizations | Compute–Comm Overlap            | Explicit scheduling to hide communication latency    | ✔ Supported    |
-|                           | DDP Gradient Bucketing          | Deferred and bucketed gradient synchronization       | ✔ Supported    |
-| Execution Mode            | Training Mode                   | Full forward–backward training with autograd         | ✔ Supported    |
-|                           | `no_grad` Inference             | Forward-only execution without gradient tracking     | ✔ Supported    |
-| Debugging & Tooling       | Built-in Profiler               | Kernel-level performance profiling                   | ✔ Supported    |
-|                           | Precision Alignment Checker     | Function / Module precision checks and E2E loss diff | ✔ Supported    |
-|                           | CTest + GTest Infrastructure    | Automated unit tests with CTest integration          | ✔ Supported    |
-|                           | Automated Benchmarking          | One-click execution, log analysis and Feishu export  | ✔ Supported    |
+| Category                  | Feature                         | Description                                          | Status      |
+| ------------------------- | ------------------------------- | ---------------------------------------------------- | ----------- |
+| Model Support             | GPT-2                           | Decoder-only Transformer language model              | ✔ Supported |
+|                           | LLaMA 3                         | Modern LLaMA-family Transformer architecture         | ✔ Supported |
+|                           | Qwen3-8B                        | Qwen3 8B language model with QK norm and GQA         | ✔ Supported |
+|                           | TinyMixtral (MoE)               | Single-GPU and distributed EP training validation    | ✔ Supported |
+|                           | DeepSeek-V3                     | Large-scale MoE-based language model                 | 🗓 Planned   |
+| Precision                 | Multiple Data Type              | FP32, BF16                                           | ✔ Supported |
+|                           | Mixed Precision                 | Autocast-based BF16 compute with FP32 accumulation   | ✔ Supported |
+| Distributed Training      | Data Parallel (DP)              | Parameter-server-style data parallelism              | ✔ Supported |
+|                           | Distributed Data Parallel (DDP) | Collective-based data parallelism                    | ✔ Supported |
+|                           | Tensor Parallelism (TP)         | Intra-layer tensor sharding                          | ✔ Supported |
+|                           | Sequence Parallelism (SP)       | Sequence dimension sharding                          | ✔ Supported |
+|                           | Pipeline Parallelism (PP)       | GPipe, 1F1B scheduling, Virtual Pipeline (vPP)       | ✔ Supported |
+|                           | Expert Parallelism (EP)         | Expert sharding and AllGather-based token dispatch   | ✔ Supported |
+|                           | Hybrid Parallelism              | Arbitrary combination of DDP + TP + SP + PP          | ✔ Supported |
+|                           | Multi-process Launch            | `infini_run` and thread-based launch modes           | ✔ Supported |
+| Core Components           | Multi-backend                   | CPU and CUDA execution backends                      | ✔ Supported |
+|                           | Multi-node Distributed Training | Distributed execution across multiple nodes          | ✔ Supported |
+|                           | Transformer Abstraction         | Generic Transformer structure abstraction            | ✔ Supported |
+|                           | Backend Registries              | Device / CCL / dtype abstraction and registration    | ✔ Supported |
+|                           | PrivateUse1 Backend Extension   | External runtime / CCL / kernel registration         | ✔ Supported |
+|                           | Kernel Dispatcher               | Kernel registration and dynamic dispatch mechanism   | ✔ Supported |
+|                           | Autograd                        | Automatic differentiation engine                     | ✔ Supported |
+|                           | Autocast                        | Automatic mixed precision runtime                    | ✔ Supported |
+|                           | Checkpointing                   | Custom format; model/optimizer/trainer state resume  | ✔ Supported |
+|                           | Learning Rate Schedulers        | PyTorch-style API; Megatron-style warmup / decay     | ✔ Supported |
+| Fine-tuning               | LoRA                            | Memory-efficient fine-tuning with merge / unmerge    | ✔ Supported |
+| Memory Optimizations      | ZeRO Stage-1                    | Sharded optimizer states for DDP                     | ✔ Supported |
+|                           | ZeRO Stage-2                    | Sharded gradients across DDP ranks                   | ✔ Supported |
+|                           | Activation Recomputation        | Reentrant/non-reentrant; none/uniform/block          | ✔ Supported |
+| Performance Optimizations | Compute–Comm Overlap            | Explicit scheduling to hide communication latency    | ✔ Supported |
+|                           | DDP Gradient Bucketing          | Deferred and bucketed gradient synchronization       | ✔ Supported |
+| Execution Mode            | Training Mode                   | Full forward–backward training with autograd         | ✔ Supported |
+|                           | `no_grad` Inference             | Forward-only execution without gradient tracking     | ✔ Supported |
+| Debugging & Tooling       | Built-in Profiler               | Kernel-level performance profiling                   | ✔ Supported |
+|                           | Precision Alignment Checker     | Function / Module precision checks and E2E loss diff | ✔ Supported |
+|                           | CTest + GTest Infrastructure    | Automated unit tests with CTest integration          | ✔ Supported |
+|                           | Automated Benchmarking          | One-click execution, log analysis and Feishu export  | ✔ Supported |
 
 ## 🏋️ Training
 
-Each model in the `example/` directory is compiled into an independent executable.  
+Each model in the `example/` directory is compiled into an independent executable.
 For example, the `llama3` example produces a binary named `llama3`.
 
 To view available runtime options:
@@ -280,9 +285,18 @@ data_parallel_size = world_size / (tensor_parallel × pipeline_parallel)
 --virtual_pipeline_parallel 4  	# Virtual pipeline for better load balancing
 ```
 
+#### Expert Parallelism (EP)
+
+MoE training supports expert sharding across ranks with an
+`AllGather`-based token dispatcher. The distributed TinyMixtral example
+validates cross-rank token dispatch, local expert computation, and gradient
+synchronization. Dense and MoE communication topology views provide the
+corresponding process groups.
+
 #### Combining Parallelism Strategies
 
 Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scale training across devices and nodes.
+MoE models additionally support EP; supported combinations depend on the model and configuration.
 
 ## 🗺 Roadmap
 
@@ -332,3 +346,38 @@ Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scal
 
   Integrated a CTest + GTest based testing infrastructure to strengthen the
    framework's automated test workflow.
+
+- **2026/10/21** — InfiniTrain **v0.7.0**
+
+  Added training checkpointing with a custom checkpoint format, supporting
+  model weights, optimizer state, and trainer state save/load, with validated
+  resume-from-checkpoint workflows. Additional formats and recovery scenarios
+  are planned. ([#146](https://github.com/InfiniTensor/InfiniTrain/pull/146))
+
+  Introduced PyTorch-style learning rate schedulers and Megatron-inspired
+  training helpers for common warmup and decay schedules.
+  ([#151](https://github.com/InfiniTensor/InfiniTrain/pull/151))
+
+  Added MoE training support with `TopKRouter`, `Experts`,
+  `MoETokenDispatcher`, and `MoELayer`, and extended it with Expert
+  Parallelism (EP), including Dense / MoE topology views, expert sharding,
+  AllGather-based token dispatch, and gradient synchronization. Validated
+  end-to-end TinyMixtral training on both single-GPU and distributed
+  configurations.
+  ([#153](https://github.com/InfiniTensor/InfiniTrain/pull/153),
+  [#246](https://github.com/InfiniTensor/InfiniTrain/pull/246),
+  [#248](https://github.com/InfiniTensor/InfiniTrain/pull/248),
+  [#191](https://github.com/InfiniTensor/InfiniTrain/pull/191))
+
+  Added torchrun-style multi-process distributed launching via `infini_run`,
+  while retaining the existing multi-thread launch mode.
+  ([#184](https://github.com/InfiniTensor/InfiniTrain/pull/184))
+
+  Introduced a `PrivateUse1` backend extension point for external runtime,
+  CCL, and kernel registration without vendor-specific framework changes.
+  ([#206](https://github.com/InfiniTensor/InfiniTrain/pull/206))
+
+  Added activation checkpointing aligned with `torch.utils.checkpoint`,
+  supporting reentrant and non-reentrant (default) modes and `none`, `uniform`,
+  and `block` Transformer recomputation strategies.
+  ([#154](https://github.com/InfiniTensor/InfiniTrain/pull/154))
