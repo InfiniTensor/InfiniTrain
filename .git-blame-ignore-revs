@@ -3,4 +3,4 @@
 # Keep the formatting commit when merging; update this hash if it is rewritten.
 
 # Apply clang-format 16.0.6 to C/C++/CUDA sources and Black to Python scripts.
-0a6e6899d3cf7c8360db685c1935e051dce5fc79
+30732097c4ab0421939aab1d41248d28a64d4e68
