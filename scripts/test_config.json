@@ -1285,27 +1285,13 @@
                 {
                     "id": "1",
                     "args": {
-                        "dtype": "float32",
-                        "nthread_per_process": 1,
-                        "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
-                        "sequence_length": 64,
-                        "expert_parallel": 1,
-                        "zero_stage": 0
+                        "dtype": "float32"
                     }
                 },
                 {
                     "id": "1_bfloat16",
                     "args": {
-                        "dtype": "bfloat16",
-                        "nthread_per_process": 1,
-                        "num_iteration": 10,
-                        "micro_batch_size": 1,
-                        "global_batch_size": 8,
-                        "sequence_length": 64,
-                        "expert_parallel": 1,
-                        "zero_stage": 0
+                        "dtype": "bfloat16"
                     }
                 },
                 {
