@@ -6,7 +6,7 @@ option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
 option(BUILD_TEST "Build InfiniTrain tests" OFF)
 
-project(infini_train VERSION 0.6.0 LANGUAGES CXX)
+project(infini_train VERSION 0.7.0 LANGUAGES CXX)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
