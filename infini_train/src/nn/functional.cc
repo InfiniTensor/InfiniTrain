@@ -101,9 +101,11 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input,
   return std::make_shared<autograd::Softmax>(dim)->Apply({input})[0];
 }
 
-std::shared_ptr<Tensor> ScaledDotProductAttention(const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-                                                  const std::shared_ptr<Tensor> &v, float scale) {
-    return std::make_shared<autograd::ScaledDotProductAttention>(scale)->Apply({q, k, v})[0];
+std::shared_ptr<Tensor> ScaledDotProductAttention(
+    const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+    const std::shared_ptr<Tensor> &v, float scale) {
+  return std::make_shared<autograd::ScaledDotProductAttention>(scale)->Apply(
+      {q, k, v})[0];
 }
 
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
