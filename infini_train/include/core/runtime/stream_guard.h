@@ -2,7 +2,13 @@
 
 #include "infini_train/include/core/runtime/device_guard.h"
 
+namespace infini_train {
+class Device;
+}
+
 namespace infini_train::core {
+
+class Stream;
 
 // Select device and its current stream for this scope. On destruction, restore
 // the target device's previous stream, then restore the original device within
