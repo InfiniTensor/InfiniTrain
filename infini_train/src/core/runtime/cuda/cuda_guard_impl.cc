@@ -3,6 +3,7 @@
 #include <array>
 #include <memory>
 #include <mutex>
+#include <vector>
 
 #include "infini_train/include/common/cuda/common_cuda.h"
 #include "infini_train/include/core/runtime/runtime_common.h"
@@ -16,10 +17,19 @@ constexpr int kMaxGpus = 8;
 constexpr size_t kBytesPerMB = 1024ULL * 1024ULL;
 
 static std::array<std::unique_ptr<CudaStream>, kMaxGpus> cuda_streams;
-static std::array<std::unique_ptr<CudaBlasHandle>, kMaxGpus> cuda_blas_handles;
+static thread_local std::array<Stream *, kMaxGpus> current_streams = {};
+// Each thread exclusively reserves one handle per device. The pool retains
+// handles after thread exit for reuse, since CudaBlasHandle deliberately does
+// not destroy its CUDA resources during teardown.
+struct BlasHandlePool {
+  std::mutex mutex;
+  std::array<std::vector<std::shared_ptr<CudaBlasHandle>>, kMaxGpus> handles;
+};
+static BlasHandlePool cuda_blas_handle_pool;
+static thread_local std::array<std::shared_ptr<CudaBlasHandle>, kMaxGpus>
+    cuda_blas_handles;
 
 static std::array<std::once_flag, kMaxGpus> device_stream_flags;
-static std::array<std::once_flag, kMaxGpus> device_handle_flags;
 
 inline void CheckCudaDevice(Device device) {
   CHECK(device.type() == Device::DeviceType::kCUDA) << std::format(
@@ -51,12 +61,27 @@ void CudaGuardImpl::InitSingleStream(Device device) {
   CUDA_CHECK(cudaSetDevice(device.index()));
 
   cuda_streams[device.index()] = std::make_unique<CudaStream>();
+  current_streams[device.index()] = cuda_streams[device.index()].get();
 
   CUDA_CHECK(cudaSetDevice(current_device));
 }
 
 void CudaGuardImpl::InitSingleHandle(Device device) {
   CheckCudaDevice(device);
+
+  auto &handle = cuda_blas_handles.at(device.index());
+  if (handle) {
+    return;
+  }
+  std::lock_guard<std::mutex> lock(cuda_blas_handle_pool.mutex);
+  auto &pooled_handles = cuda_blas_handle_pool.handles.at(device.index());
+  for (const auto &pooled_handle : pooled_handles) {
+    // A pool-only reference means no thread currently reserves this handle.
+    if (pooled_handle.use_count() == 1) {
+      handle = pooled_handle;
+      return;
+    }
+  }
 
   int current_device = -1;
   CUDA_CHECK(cudaGetDevice(&current_device));
@@ -65,8 +90,8 @@ void CudaGuardImpl::InitSingleHandle(Device device) {
   std::call_once(device_stream_flags.at(device.index()), InitSingleStream,
                  device);
 
-  cuda_blas_handles[device.index()] =
-      std::make_unique<CudaBlasHandle>(cuda_streams[device.index()].get());
+  handle = std::make_shared<CudaBlasHandle>(cuda_streams[device.index()].get());
+  pooled_handles.push_back(handle);
 
   CUDA_CHECK(cudaSetDevice(current_device));
 }
@@ -103,7 +128,23 @@ Stream *CudaGuardImpl::GetStream(Device device) const {
   // times within the same process (e.g. in unit tests).
   std::call_once(device_stream_flags.at(device.index()), InitSingleStream,
                  device);
-  return cuda_streams.at(device.index()).get();
+  if (current_streams.at(device.index()) == nullptr) {
+    current_streams.at(device.index()) = cuda_streams.at(device.index()).get();
+  }
+  return current_streams.at(device.index());
+}
+
+Stream *CudaGuardImpl::ExchangeStream(Device device, Stream *stream) const {
+  CheckCudaDevice(device);
+  std::call_once(device_stream_flags.at(device.index()), InitSingleStream,
+                 device);
+  CHECK_NOTNULL(stream);
+  if (current_streams.at(device.index()) == nullptr) {
+    current_streams.at(device.index()) = cuda_streams.at(device.index()).get();
+  }
+  auto *previous_stream = current_streams.at(device.index());
+  current_streams[device.index()] = stream;
+  return previous_stream;
 }
 
 Stream *CudaGuardImpl::CreateStream(Device device) const {
@@ -229,9 +270,13 @@ void CudaGuardImpl::SynchronizeStream(Stream *stream) const {
 // blas
 BlasHandle *CudaGuardImpl::GetBlasHandle(Device device) const {
   CheckCudaDevice(device);
-  std::call_once(device_handle_flags.at(device.index()), InitSingleHandle,
-                 device);
-  return cuda_blas_handles.at(device.index()).get();
+  if (!cuda_blas_handles.at(device.index())) {
+    InitSingleHandle(device);
+  }
+  auto *handle = cuda_blas_handles.at(device.index()).get();
+  CUBLAS_CHECK(cublasSetStream(handle->cublas_handle(),
+                               GetCudaStream(GetStream(device))));
+  return handle;
 }
 
 // memory
