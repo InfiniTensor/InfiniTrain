@@ -1,5 +1,7 @@
 #include "infini_train/include/core/runtime/stream_guard.h"
 
+#include "infini_train/include/device.h"
+
 namespace infini_train::core {
 
 StreamGuard::StreamGuard(Device device, Stream *stream)
