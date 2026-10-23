@@ -31,7 +31,8 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(
     : ColumnParallelLinear(
           in_features, out_features, base_module->bias(),
           base_module->gather_output(), base_module->input_is_parallel(),
-          base_module->skip_bias_add(), base_module->sequence_parallel()),
+          base_module->skip_bias_add(), base_module->sequence_parallel(),
+          base_module->tp_comm_buffer_name()),
       config_(config),
       in_features_(in_features),
       out_features_(out_features) {
@@ -72,7 +73,7 @@ LoRAColumnParallelLinear::LoRAColumnParallelLinear(
               parallel::global::GetTensorParallelSize(),
           base_module->bias(), base_module->gather_output(),
           base_module->input_is_parallel(), base_module->skip_bias_add(),
-          base_module->sequence_parallel()),
+          base_module->sequence_parallel(), base_module->tp_comm_buffer_name()),
       config_(config) {
   CHECK(base_module != nullptr) << "base_module cannot be null";
 

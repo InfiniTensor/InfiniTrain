@@ -40,7 +40,8 @@ MLP::MLP(const TransformerConfig &config, bool is_expert)
       /*gather_output=*/false,
       /*input_is_parallel=*/false,
       /*skip_bias_add=*/false,
-      /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled());
+      /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled(),
+      /*tp_comm_buffer_name=*/"fc1");
 
   // Activation: check for GELU or SwiGLU
   if (config.activation_type == MLPType::kGELU) {
