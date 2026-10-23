@@ -348,7 +348,6 @@ void GlobalEnv::Init(int nthread_per_process,
       << "Expert Tensor Parallel size must be >= 1";
 
   model_parallel_config_ = config;
-  expert_tensor_parallel_size_ = resolved_expert_tensor_parallel_size;
 
   const int dense_model_parallel_size =
       model_parallel_config_.tensor_model_parallel_size *
@@ -359,7 +358,7 @@ void GlobalEnv::Init(int nthread_per_process,
   data_parallel_size_ = world_size_ / dense_model_parallel_size;
 
   const int expert_model_parallel_size =
-      expert_tensor_parallel_size_ *
+      resolved_expert_tensor_parallel_size *
       model_parallel_config_.expert_model_parallel_size *
       model_parallel_config_.pipeline_model_parallel_size;
   CHECK_EQ(world_size_ % expert_model_parallel_size, 0)
@@ -375,7 +374,7 @@ void GlobalEnv::Init(int nthread_per_process,
                     /*expert_parallel_size=*/1, data_parallel_size_,
                     model_parallel_config_.pipeline_model_parallel_size);
   expert_rank_generator_ =
-      RankGenerator(expert_tensor_parallel_size_,
+      RankGenerator(resolved_expert_tensor_parallel_size,
                     model_parallel_config_.expert_model_parallel_size,
                     expert_data_parallel_size_,
                     model_parallel_config_.pipeline_model_parallel_size);
@@ -433,7 +432,8 @@ int GlobalEnv::tensor_parallel_size() const {
 
 int GlobalEnv::expert_tensor_parallel_size() const {
   CHECK(initialized_) << "GlobalEnv is not initialized!";
-  return expert_tensor_parallel_size_;
+  return model_parallel_config_.expert_tensor_parallel_size.value_or(
+      model_parallel_config_.tensor_model_parallel_size);
 }
 
 int GlobalEnv::sequence_parallel_size() const {
