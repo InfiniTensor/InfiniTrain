@@ -323,6 +323,16 @@ void DistributedDataParallel::OnGradReady(
   }
 }
 
+ShardedStateDict DistributedDataParallel::BuildShardedStateDict(
+    const ShardedStateDictBuildContext &context) const {
+  const auto local_prefix = context.local_prefix.empty()
+                                ? std::string(kModuleName)
+                                : context.local_prefix + "." + kModuleName;
+  return modules_.at(kModuleName)
+      ->BuildShardedStateDict({.logical_prefix = context.logical_prefix,
+                               .local_prefix = local_prefix});
+}
+
 std::vector<std::shared_ptr<Tensor>> DistributedDataParallel::Forward(
     const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
   deferred_sync_pending_ = !deferred_sync_params_.empty();

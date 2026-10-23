@@ -7,6 +7,7 @@
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -29,6 +30,7 @@ constexpr char kModuleName[] = "module";
 
 class DistributedDataParallel : public nn::Module {
  public:
+  using Module::BuildShardedStateDict;
   DistributedDataParallel(std::shared_ptr<nn::Module> module, const Rank &rank,
                           DistributedDataParallelConfig ddp_config);
 
@@ -36,6 +38,8 @@ class DistributedDataParallel : public nn::Module {
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
   std::shared_ptr<nn::Module> module() const;
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
   std::unique_ptr<nn::NoSyncGuard> no_sync() override;
 

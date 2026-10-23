@@ -6,6 +6,7 @@
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -71,6 +72,7 @@ class TransformerLastStage : public CloneableModule<TransformerLastStage> {
 
 class TransformerModel : public CloneableModule<TransformerModel> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "Transformer";
   static constexpr char kTransformerModelName[] = "transformer";
 
@@ -80,6 +82,9 @@ class TransformerModel : public CloneableModule<TransformerModel> {
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
 
   const TransformerConfig &Config() const;
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   const TransformerConfig config_;

@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -11,6 +12,7 @@ struct TransformerConfig;
 
 class MLP : public infini_train::nn::CloneableModule<MLP> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "MLP";
   static constexpr char kCFcLayerName[] = "c_fc";
   static constexpr char kGeluLayerName[] = "gelu";
@@ -22,5 +24,8 @@ class MLP : public infini_train::nn::CloneableModule<MLP> {
 
   std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 };
 }  // namespace infini_train::nn

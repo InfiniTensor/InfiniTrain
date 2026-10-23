@@ -7,6 +7,7 @@
 
 #include "infini_train/include/autograd/function.h"
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -38,6 +39,7 @@ std::vector<std::shared_ptr<Tensor>> CopyToTPRegionFunc(
 
 class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "ColumnParallelLinear";
 
   static constexpr char kParamWeightName[] = "weight";
@@ -57,6 +59,9 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
+
  protected:
   bool bias_ = true;
   bool gather_output_ = false;  // whether to return full local output tensor
@@ -72,6 +77,7 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
 
 class RowParallelLinear : public nn::CloneableModule<RowParallelLinear> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "RowParallelLinear";
 
   static constexpr char kParamWeightName[] = "weight";
@@ -91,6 +97,9 @@ class RowParallelLinear : public nn::CloneableModule<RowParallelLinear> {
   bool skip_bias_add() const;
   bool sequence_parallel() const;
 
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
+
  protected:
   bool bias_ = true;
   bool reduce_output_ = false;  // whether to return full local output tensor
@@ -107,6 +116,7 @@ class RowParallelLinear : public nn::CloneableModule<RowParallelLinear> {
 class VocabParallelEmbedding
     : public nn::CloneableModule<VocabParallelEmbedding> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "VocabParallelEmbedding";
   static constexpr char kParamWeightName[] = "weight";
 
@@ -116,9 +126,14 @@ class VocabParallelEmbedding
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
 
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
+
  private:
   bool reduce_scatter_embeddings_ =
       false;  // whether to perform ReduceScatter after embedding lookup
+
+  int64_t vocab_size_global_ = 0;
 
   int64_t embedding_dim_ = 0;
 

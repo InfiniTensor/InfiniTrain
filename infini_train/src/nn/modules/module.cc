@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <compare>
 #include <format>
+#include <map>
 #include <memory>
 #include <ostream>
 #include <unordered_map>
@@ -223,6 +224,48 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Module::StateDict()
     }
   }
   return state;
+}
+
+namespace {
+std::string JoinStateDictKey(const std::string &prefix,
+                             const std::string &name) {
+  return prefix.empty() ? name : prefix + "." + name;
+}
+}  // namespace
+
+ShardedStateDict Module::BuildShardedStateDict(
+    const std::string &prefix) const {
+  return BuildShardedStateDict(
+      {.logical_prefix = prefix, .local_prefix = prefix});
+}
+
+ShardedStateDict Module::BuildShardedStateDict(
+    const ShardedStateDictBuildContext &context) const {
+  ShardedStateDict sd;
+  for (auto &[name, param] : parameters_) {
+    auto key = JoinStateDictKey(context.logical_prefix, name);
+    auto info = MakeShardedTensor(key, param->Dtype(), param->Dims());
+    info.local_key = JoinStateDictKey(context.local_prefix, name);
+    info.local_tensor = param.get();
+    sd.tensors.emplace(key, std::move(info));
+  }
+  for (auto &[name, buffer] : buffers_) {
+    auto key = JoinStateDictKey(context.logical_prefix, name);
+    auto info = MakeShardedTensor(key, buffer->Dtype(), buffer->Dims());
+    info.local_key = JoinStateDictKey(context.local_prefix, name);
+    info.local_tensor = buffer.get();
+    sd.tensors.emplace(key, std::move(info));
+  }
+  for (auto &[name, module] : modules_) {
+    if (name.starts_with("__pp")) {
+      continue;
+    }
+    auto child_sd = module->BuildShardedStateDict(
+        {.logical_prefix = JoinStateDictKey(context.logical_prefix, name),
+         .local_prefix = JoinStateDictKey(context.local_prefix, name)});
+    sd.Merge(std::move(child_sd));
+  }
+  return sd;
 }
 
 void Module::LoadStateDict(

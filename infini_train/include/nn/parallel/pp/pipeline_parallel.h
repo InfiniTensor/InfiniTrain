@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "infini_train/include/nn/modules/module.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -33,6 +34,7 @@ struct StageInfo {
 
 class PipelineParallel : public Module {
  public:
+  using Module::BuildShardedStateDict;
   PipelineParallel(const std::shared_ptr<nn::Module> module, int num_stages,
                    int num_micro_batches,
                    const std::vector<std::vector<int64_t>> &recv_shape,
@@ -48,6 +50,9 @@ class PipelineParallel : public Module {
                                 int chunks_per_stage = 1);
 
   std::vector<std::shared_ptr<Module>> *mutable_chunks();
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   void BuildPipelineStage(const std::vector<std::vector<int64_t>> &recv_shape,

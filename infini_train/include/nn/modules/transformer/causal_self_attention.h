@@ -7,6 +7,7 @@
 
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
@@ -14,6 +15,7 @@ namespace infini_train::nn {
 class CausalSelfAttention
     : public infini_train::nn::CloneableModule<CausalSelfAttention> {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "CausalSelfAttention";
   static constexpr char kCAttnLayerName[] = "c_attn";
   static constexpr char kCProjLayerName[] = "c_proj";
@@ -27,6 +29,9 @@ class CausalSelfAttention
 
   std::vector<std::shared_ptr<infini_train::Tensor>> Forward(
       const std::vector<std::shared_ptr<infini_train::Tensor>> &x) override;
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
  private:
   TransformerConfig config_;

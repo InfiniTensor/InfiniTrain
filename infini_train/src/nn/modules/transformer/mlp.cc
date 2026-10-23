@@ -2,14 +2,18 @@
 
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <optional>
+#include <ostream>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "glog/logging.h"
 
+#include "infini_train/include/nn/lora/lora_parallel_linear.h"
 #include "infini_train/include/nn/modules/activations.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
@@ -92,6 +96,55 @@ std::vector<std::shared_ptr<infini_train::Tensor>> MLP::Forward(
   auto x2 = (*modules_[kGeluLayerName])(x1);
   // (B, T, 4*C_local) -> RowParallelLinear(4*C, C) -> (B, T, C)
   return (*modules_[kCProjLayerName])(x2);
+}
+
+ShardedStateDict MLP::BuildShardedStateDict(
+    const ShardedStateDictBuildContext &context) const {
+  auto state = Module::BuildShardedStateDict(context);
+  if (!modules_.contains(kSwiGLULayerName)) {
+    return state;
+  }
+
+  const auto c_fc_prefix = context.logical_prefix.empty()
+                               ? kCFcLayerName
+                               : context.logical_prefix + "." + kCFcLayerName;
+  const auto weight_key =
+      c_fc_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
+  const auto bias_key =
+      c_fc_prefix + "." + parallel::ColumnParallelLinear::kParamBiasName;
+  const auto lora_b_key =
+      c_fc_prefix + "." + lora::LoRAColumnParallelLinear::kParamLoraBName;
+  const auto weight_it = state.tensors.find(weight_key);
+  CHECK(weight_it != state.tensors.end())
+      << "Missing packed SwiGLU weight metadata: " << weight_key;
+
+  const auto &weight = weight_it->second;
+  CHECK(!weight.global_shape.empty() && !weight.local_shape.empty());
+  CHECK_EQ(weight.global_shape[0] % 2, 0);
+  CHECK_EQ(weight.local_shape[0] % 2, 0);
+  const int64_t global_rows_per_projection = weight.global_shape[0] / 2;
+  const int64_t local_rows_per_projection = weight.local_shape[0] / 2;
+  const int rank = parallel::tp_rank;
+
+  for (auto &[key, tensor] : state.tensors) {
+    if (key != weight_key && key != bias_key && key != lora_b_key) {
+      continue;
+    }
+    CHECK(!tensor.global_shape.empty() && !tensor.local_shape.empty());
+    CHECK_EQ(tensor.global_shape[0], weight.global_shape[0]);
+    CHECK_EQ(tensor.local_shape[0], weight.local_shape[0]);
+    tensor.global_offset.assign(tensor.global_shape.size(), 0);
+    tensor.segments = {
+        {.global_offset = rank * local_rows_per_projection,
+         .local_offset = 0,
+         .length = local_rows_per_projection},
+        {.global_offset =
+             global_rows_per_projection + rank * local_rows_per_projection,
+         .local_offset = local_rows_per_projection,
+         .length = local_rows_per_projection},
+    };
+  }
+  return state;
 }
 
 }  // namespace infini_train::nn

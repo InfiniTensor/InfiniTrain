@@ -50,11 +50,13 @@ struct SaveCheckpointArgs {
   int64_t n_head = 0;
   int64_t n_kv_head = 0;
   int64_t n_embd = 0;
-  int64_t vocab_size = 0;
+  int64_t original_vocab_size = 0;
+  int64_t padded_vocab_size = 0;
   int ddp_size = 1;
   int tp_size = 1;
   int sp_size = 1;
   int pp_size = 1;
+  int vpp_size = 1;
   std::filesystem::path checkpoint_root_dir;
   size_t max_checkpoint_keep = 0;
   const nn::parallel::Rank &rank;

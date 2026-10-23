@@ -6,7 +6,9 @@
 #include <vector>
 
 #include "infini_train/include/nn/lora/lora_config.h"
+#include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
+#include "infini_train/include/shard_spec.h"
 
 namespace infini_train {
 class Tensor;
@@ -21,6 +23,7 @@ namespace infini_train::nn::lora {
 // (implemented as ColumnParallelLinear with gather_output)
 class LoRAColumnParallelLinear : public nn::parallel::ColumnParallelLinear {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "LoRAColumnParallelLinear";
 
   static constexpr char kParamLoraAName[] = "lora_A";
@@ -39,6 +42,9 @@ class LoRAColumnParallelLinear : public nn::parallel::ColumnParallelLinear {
 
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
   void MergeWeights();
   void UnmergeWeights();
@@ -68,6 +74,7 @@ class LoRAColumnParallelLinear : public nn::parallel::ColumnParallelLinear {
 // [out_features, rank] - replicated (implemented as Linear)
 class LoRARowParallelLinear : public nn::parallel::RowParallelLinear {
  public:
+  using Module::BuildShardedStateDict;
   static constexpr char kType[] = "LoRARowParallelLinear";
   static constexpr char kParamLoraAName[] = "lora_A";
   static constexpr char kParamLoraBName[] = "lora_B";
@@ -85,6 +92,9 @@ class LoRARowParallelLinear : public nn::parallel::RowParallelLinear {
 
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+  ShardedStateDict BuildShardedStateDict(
+      const ShardedStateDictBuildContext &context) const override;
 
   void MergeWeights();
   void UnmergeWeights();

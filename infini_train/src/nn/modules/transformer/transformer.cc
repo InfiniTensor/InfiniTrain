@@ -395,21 +395,23 @@ TransformerModel::TransformerModel(const TransformerConfig config)
       start_layer_to_layer_size_and_chunk[start_layer] =
           std::make_pair(end_layer - start_layer, chunk);
     }
-    std::vector<std::shared_ptr<nn::Module>> h;
+    std::unordered_map<std::string, std::shared_ptr<nn::Module>> h;
     int chunk_idx = 0;
     for (auto &[start_layer, layer_size_and_chunk] :
          start_layer_to_layer_size_and_chunk) {
       auto [layer_size, chunk] = layer_size_and_chunk;
-      for (int idx = 0; idx < layer_size; ++idx) {
-        h.push_back(chunk->mutable_module(TransformerChunk::kHLayerName)
-                        ->mutable_module(std::to_string(idx)));
+      for (int local_layer = 0; local_layer < layer_size; ++local_layer) {
+        const auto global_layer = start_layer + local_layer;
+        h[std::to_string(global_layer)] =
+            chunk->mutable_module(TransformerChunk::kHLayerName)
+                ->mutable_module(std::to_string(local_layer));
       }
       modules_[kPPChunkNamePrefix + std::to_string(chunk_idx)] =
           std::move(chunk);
       ++chunk_idx;
     }
     transformer[TransformerChunk::kHLayerName] =
-        std::make_shared<nn::ModuleList>(std::move(h));
+        std::make_shared<nn::ModuleDict>(std::move(h));
   }
 
   if (stage_info_.is_last_stage) {
@@ -434,6 +436,12 @@ TransformerModel::TransformerModel(const TransformerConfig config)
   // GPT2::FromLLMC() loading logic to respect weight tying (do not create/load
   // a separate lm_head.weight tensor; load once into the tied weight) so
   // parameter counting matches PyTorch/PEFT.
+  // FIXME(jym): A checkpoint saved with PP > 1 contains independent wte.weight
+  // and lm_head.weight tensors. Loading it with PP == 1 aliases both keys to
+  // the same destination Tensor, so Module::LoadStateDict copies both values
+  // and the final result depends on unordered-map iteration order. Canonicalize
+  // tied checkpoint keys, or reject PP > 1 to PP == 1 resharding for tied
+  // models until cross-stage weight tying is supported.
   if (config_.tie_weights &&
       nn::parallel::global::GetPipelineParallelSize() == 1) {
     // https://paperswithcode.com/method/weight-tying
@@ -444,6 +452,22 @@ TransformerModel::TransformerModel(const TransformerConfig config)
         module(TransformerLastStage::kLMHeadLayerName)
             .parameter(nn::parallel::ColumnParallelLinear::kParamWeightName);
   }
+}
+
+ShardedStateDict TransformerModel::BuildShardedStateDict(
+    const ShardedStateDictBuildContext &context) const {
+  auto state = Module::BuildShardedStateDict(context);
+  if (stage_info_.is_last_stage) {
+    const auto lm_head_prefix =
+        context.logical_prefix.empty()
+            ? TransformerLastStage::kLMHeadLayerName
+            : context.logical_prefix + "." +
+                  TransformerLastStage::kLMHeadLayerName;
+    const auto weight_key =
+        lm_head_prefix + "." + parallel::ColumnParallelLinear::kParamWeightName;
+    state.tensors.at(weight_key).allow_shape_mismatch = true;
+  }
+  return state;
 }
 
 std::vector<std::shared_ptr<Tensor>> TransformerModel::Forward(

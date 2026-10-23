@@ -1,9 +1,12 @@
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <optional>
 #include <string>
 #include <unordered_map>
+#include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -20,6 +23,7 @@
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -205,6 +209,18 @@ TEST_P(TransformerModuleTest, LLaMA3Model) {
   auto model = std::make_shared<nn::TransformerModel>(config);
   model->To(GetDevice());
   EXPECT_FALSE(model->Parameters().empty());
+  const auto sharded_state = model->BuildShardedStateDict();
+  std::unordered_set<const Tensor *> sharded_tensors;
+  for (const auto &[key, info] : sharded_state.tensors) {
+    if (info.local_tensor != nullptr) {
+      sharded_tensors.insert(info.local_tensor);
+    }
+  }
+
+  for (const auto &[name, parameter] : model->NamedParameters()) {
+    EXPECT_TRUE(sharded_tensors.contains(parameter.get()))
+        << "Missing shard metadata for parameter: " << name;
+  }
 }
 
 TEST_P(TransformerModuleTest, RoPEUtils) {
