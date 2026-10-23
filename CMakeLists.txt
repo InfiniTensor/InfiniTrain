@@ -282,11 +282,6 @@ add_subdirectory(tools/infini_run)
 set_target_properties(infini_run PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
 endif()
 
-if(PROJECT_IS_TOP_LEVEL AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/tools/tp_overlap_bench/CMakeLists.txt")
-  add_subdirectory(tools/tp_overlap_bench)
-  set_target_properties(tp_overlap_bench PROPERTIES RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR})
-endif()
-
 # Tests
 if(BUILD_TEST)
   add_subdirectory(tests)
