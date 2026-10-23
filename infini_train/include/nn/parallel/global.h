@@ -119,7 +119,6 @@ class GlobalEnv {
   int local_proc_rank_ = 0;
 
   ModelParallelConfig model_parallel_config_;
-  int expert_tensor_parallel_size_ = 1;  // Resolved ETP size (defaults to TP).
 
   int data_parallel_size_ = 1;
   int expert_data_parallel_size_ = 1;
