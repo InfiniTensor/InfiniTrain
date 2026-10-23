@@ -1,16 +1,21 @@
+#include <stddef.h>
 #include <stdint.h>
 
 #include <cmath>
+#include <initializer_list>
 #include <memory>
+#include <optional>
 #include <random>
 #include <string>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/autocast.h"
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -121,6 +126,8 @@ TEST_P(Qwen3ArchitectureTest, FlashMatchesUnfusedTraining) {
     config.n_head = 4;
     config.n_kv_head = 1;
     config.n_embd = config.n_head * head_dim;
+    // Preserve Qwen3's 3:1 FFN/hidden ratio at the reduced test dimensions.
+    config.ffn_hidden_size = 3 * config.n_embd;
     qwen3::SanitizeQwen3Config(config);
     auto unfused = std::make_shared<nn::TransformerModel>(config);
     config.flash = true;
