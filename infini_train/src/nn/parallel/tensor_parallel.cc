@@ -402,14 +402,18 @@ class LinearWithGradAccumulationAndAsyncCommunication
 
   void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
                     const std::vector<std::shared_ptr<Tensor>> &) override {
-    const bool need_input = ctx_.needs_input_grad()[0];
-    const bool need_weight = ctx_.needs_input_grad()[1];
-    ctx_.SaveForBackward({need_weight ? input_sequence_major_ : nullptr,
+    auto input_sequence_major = std::move(input_sequence_major_);
+    const auto &needs_input_grad = ctx_.needs_input_grad();
+    if (needs_input_grad.empty()) {
+      return;
+    }
+    const bool need_input = needs_input_grad[0];
+    const bool need_weight = needs_input_grad[1];
+    ctx_.SaveForBackward({need_weight ? input_sequence_major : nullptr,
                           need_input ? inputs[1] : nullptr});
     in_features_ = inputs[1]->Dims()[1];
     out_features_ = inputs[1]->Dims()[0];
-    input_sequence_major_dims_ = input_sequence_major_->Dims();
-    input_sequence_major_.reset();
+    input_sequence_major_dims_ = input_sequence_major->Dims();
   }
 
   std::vector<std::shared_ptr<Tensor>> Backward(
