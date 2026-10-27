@@ -2,8 +2,11 @@
 
 #include <stdint.h>
 
+#include <cstddef>
 #include <memory>
 #include <vector>
+
+#include "infini_train/include/datatype.h"
 
 namespace infini_train {
 class Tensor;
@@ -16,6 +19,9 @@ std::vector<std::shared_ptr<Tensor>> ISend(
     const std::vector<std::shared_ptr<Tensor>> &input_tensors,
     Device target_device, int peer_rank,
     const std::vector<std::vector<int64_t>> &shape);
+
+std::vector<DataType> ReceiveDtypes(size_t tensor_count, Device device,
+                                    int peer_rank);
 
 std::vector<std::shared_ptr<Tensor>> IRecv(
     const std::vector<std::shared_ptr<Tensor>> &outputs, Device src_device,
