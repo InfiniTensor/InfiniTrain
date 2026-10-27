@@ -1,5 +1,6 @@
 #include <stdint.h>
 
+#include <initializer_list>
 #include <memory>
 #include <vector>
 
@@ -60,6 +61,45 @@ TEST_P(AutogradLinearBackwardTest, LinearBackwardNoBias) {
   grad->Fill(1.0f);
   auto grad_inputs = linear_fn->Backward({grad});
   EXPECT_EQ(grad_inputs.size(), 2);
+}
+
+TEST_P(AutogradLinearBackwardTest, RawLinearSupportsBothWeightLayouts) {
+  const float x[] = {1, 2, 3, 4, 5, 6};
+  const float w[] = {1, 0, -1, 2, 3, 1};
+  const float wt[] = {1, 2, 0, 3, -1, 1};
+  const float b[] = {1, -2};
+  const float dy[] = {1, 2, -1, 3};
+  auto input = std::make_shared<Tensor>(x, std::vector<int64_t>{2, 3},
+                                        DataType::kFLOAT32, GetDevice());
+  auto bias = std::make_shared<Tensor>(b, std::vector<int64_t>{2},
+                                       DataType::kFLOAT32, GetDevice());
+  auto grad = std::make_shared<Tensor>(dy, std::vector<int64_t>{2, 2},
+                                       DataType::kFLOAT32, GetDevice());
+  for (bool transpose : {true, false}) {
+    SCOPED_TRACE(transpose);
+    const auto weight_dims =
+        transpose ? std::vector<int64_t>{2, 3} : std::vector<int64_t>{3, 2};
+    auto weight = std::make_shared<Tensor>(transpose ? w : wt, weight_dims,
+                                           DataType::kFLOAT32, GetDevice());
+    test::ExpectTensorFloatEqual(
+        autograd::linear::Forward(input, weight, transpose, bias),
+        std::vector<float>{-1, 9, -1, 27});
+    test::ExpectTensorFloatEqual(
+        autograd::linear::Forward(input, weight, transpose),
+        std::vector<float>{-2, 11, -2, 29});
+    test::ExpectTensorFloatEqual(
+        autograd::linear::BackwardInput(weight, grad, transpose, 3, 2,
+                                        input->Dims()),
+        std::vector<float>{5, 6, 1, 5, 9, 4});
+    auto grad_weight =
+        autograd::linear::BackwardWeight(input, grad, transpose, 3, 2);
+    EXPECT_EQ(grad_weight->Dims(), weight_dims);
+    test::ExpectTensorFloatEqual(
+        grad_weight, transpose ? std::vector<float>{-3, -3, -3, 14, 19, 24}
+                               : std::vector<float>{-3, 14, -3, 19, -3, 24});
+  }
+  test::ExpectTensorFloatEqual(autograd::linear::BackwardBias(grad, 2),
+                               std::vector<float>{0, 5});
 }
 
 INFINI_TRAIN_REGISTER_TEST(AutogradLinearBackwardTest);

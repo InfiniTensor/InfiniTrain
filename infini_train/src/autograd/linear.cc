@@ -12,27 +12,30 @@ namespace infini_train::autograd {
 namespace linear {
 std::shared_ptr<Tensor> Forward(const std::shared_ptr<Tensor> &input,
                                 const std::shared_ptr<Tensor> &weight,
+                                bool transpose,
                                 const std::shared_ptr<Tensor> &bias) {
   return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-      {input->GetDevice().type(), "LinearForward"}, input, weight, true, bias);
+      {input->GetDevice().type(), "LinearForward"}, input, weight, transpose,
+      bias);
 }
 
 std::shared_ptr<Tensor> BackwardInput(
     const std::shared_ptr<Tensor> &weight,
-    const std::shared_ptr<Tensor> &grad_output,
+    const std::shared_ptr<Tensor> &grad_output, bool transpose,
+    int64_t in_features, int64_t out_features,
     const std::vector<int64_t> &input_dims) {
   return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
       {grad_output->GetDevice().type(), "LinearBackwardInput"}, weight,
-      grad_output, true, weight->Dims()[1], weight->Dims()[0], input_dims);
+      grad_output, transpose, in_features, out_features, input_dims);
 }
 
 std::shared_ptr<Tensor> BackwardWeight(
     const std::shared_ptr<Tensor> &input,
-    const std::shared_ptr<Tensor> &grad_output, int64_t in_features,
-    int64_t out_features) {
+    const std::shared_ptr<Tensor> &grad_output, bool transpose,
+    int64_t in_features, int64_t out_features) {
   return Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
       {grad_output->GetDevice().type(), "LinearBackwardWeight"}, input,
-      grad_output, true, in_features, out_features);
+      grad_output, transpose, in_features, out_features);
 }
 
 std::shared_ptr<Tensor> BackwardBias(const std::shared_ptr<Tensor> &grad_output,
@@ -50,7 +53,7 @@ std::vector<std::shared_ptr<Tensor>> Linear::Forward(
   const auto &weight = input_tensors[1];
   const auto &bias = input_tensors.size() == 3 ? input_tensors[2] : nullptr;
 
-  return {linear::Forward(input, weight, bias)};
+  return {linear::Forward(input, weight, /*transpose=*/true, bias)};
 }
 
 void Linear::SetupContext(
@@ -95,11 +98,13 @@ std::vector<std::shared_ptr<Tensor>> Linear::Backward(
   std::shared_ptr<Tensor> grad_bias = nullptr;
 
   if (need_grad_input) {
-    grad_input = linear::BackwardInput(weight, grad_output, input_dims_);
+    grad_input =
+        linear::BackwardInput(weight, grad_output, /*transpose=*/true,
+                              in_features_, out_features_, input_dims_);
   }
   if (need_grad_weight) {
-    grad_weight =
-        linear::BackwardWeight(input, grad_output, in_features_, out_features_);
+    grad_weight = linear::BackwardWeight(input, grad_output, /*transpose=*/true,
+                                         in_features_, out_features_);
   }
   if (need_grad_bias) {
     grad_bias = linear::BackwardBias(grad_output, out_features_);
