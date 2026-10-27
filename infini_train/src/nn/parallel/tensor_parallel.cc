@@ -282,19 +282,19 @@ std::shared_ptr<Tensor> SequenceChunk(const std::shared_ptr<Tensor> &tensor,
       *tensor, rank * (tensor->SizeInBytes() / tp_size), dims);
 }
 
-// Ring AG: send the current shard before its GEMM, wait only before consuming
-// the next shard. Both Column forward and Row dgrad use this schedule. Gathered
-// data is also needed by Row wgrad.
+// Pipeline ring AllGather with Column forward or Row dgrad GEMMs.
+// Row wgrad also consumes the completed gathered tensor.
 template <typename Gemm>
-std::shared_ptr<Tensor> AllGatherGemm(const std::shared_ptr<Tensor> &local,
-                                      const ProcessGroup *group,
-                                      std::shared_ptr<Tensor> &gathered,
-                                      Gemm gemm) {
+std::shared_ptr<Tensor> AllGatherWhileGemm(const std::shared_ptr<Tensor> &local,
+                                           const ProcessGroup *group,
+                                           std::shared_ptr<Tensor> &gathered,
+                                           Gemm gemm) {
   const int size = global::GetTensorParallelSize();
   const int rank = group->GetGroupRank(local->GetDevice().Rank().GlobalRank());
   auto dims = local->Dims();
   dims[0] *= size;
   gathered = std::make_shared<Tensor>(dims, local->Dtype(), local->GetDevice());
+  // Keep shards in rank order even though the ring visits them cyclically.
   SequenceChunk(gathered, rank, size)->CopyFrom(local);
   std::shared_ptr<Tensor> output;
   for (int step = 0; step < size; ++step) {
@@ -302,6 +302,9 @@ std::shared_ptr<Tensor> AllGatherGemm(const std::shared_ptr<Tensor> &local,
     auto input_chunk = SequenceChunk(gathered, shard, size);
     std::shared_ptr<Work> work;
     if (step + 1 < size) {
+      // Send the ready shard and receive the next one on the communication
+      // stream. BatchSendRecv waits for this shard's producer, but is issued
+      // before its GEMM so the transfer can overlap that computation.
       work = group->BatchSendRecv(
           {{P2POpType::kSend, input_chunk, (rank + 1) % size},
            {P2POpType::kRecv,
@@ -318,19 +321,18 @@ std::shared_ptr<Tensor> AllGatherGemm(const std::shared_ptr<Tensor> &local,
     }
     SequenceChunk(output, shard, size)->CopyFrom(chunk);
     if (work) {
+      // Queue the compute-stream wait after the current GEMM, just before
+      // the next iteration consumes the received shard; the CPU does not wait.
       work->WaitNonBlocking();
     }
   }
   return output;
 }
 
-// ReduceScatter expressed as one rooted Reduce per destination sequence shard.
-// GEMM(i+1) can run while Reduce(i) is in flight. Keep every partial alive
-// until the caller joins the last work on the compute stream; Work itself does
-// not own tensors. All reductions use the same communication stream, so only
-// the final Work is needed to join the entire sequence.
+// Pipeline GEMMs with one rooted Reduce per destination sequence shard.
+// Together, these reductions produce the same partitioned result as RS.
 template <typename Gemm>
-std::shared_ptr<Tensor> GemmReduceScatter(
+std::shared_ptr<Tensor> GemmWhileReduceScatter(
     const std::shared_ptr<Tensor> &input, const ProcessGroup *group,
     std::vector<std::shared_ptr<Tensor>> &partials, std::shared_ptr<Work> &work,
     Gemm gemm) {
@@ -338,15 +340,21 @@ std::shared_ptr<Tensor> GemmReduceScatter(
   const int rank = group->GetGroupRank(input->GetDevice().Rank().GlobalRank());
   for (int shard = 0; shard < size; ++shard) {
     auto partial = gemm(SequenceChunk(input, shard, size));
+    // Work does not own tensor storage. Retain every partial until the caller
+    // has queued the final communication wait on the compute stream.
     partials.push_back(partial);
+    // Reduce waits for this GEMM's output on the communication stream. Do not
+    // wait here: the next shard's GEMM can overlap the current reduction.
     work =
         group->Reduce(partial, partial, shard, comm::ReduceOpType::kSum, true);
   }
+  // Reductions share one ordered stream, so waiting for the last Work covers
+  // all shards. The caller joins it before consuming the result, optionally
+  // after independent wgrad computation to also overlap the communication tail.
   return partials[rank];
 }
 
-// One SP Linear Function owns the collectives for both Column and Row
-// projections.
+// One SP Linear Function owns the collectives for both Column/Row projections.
 class LinearWithGradAccumulationAndAsyncCommunication
     : public autograd::Function {
  public:
@@ -370,12 +378,13 @@ class LinearWithGradAccumulationAndAsyncCommunication
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &inputs) override {
     CHECK_EQ(inputs.size(), bias_ ? 3 : 2);
-    input_sequence_major_ = inputs[0]->Transpose(0, 1);
+    // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+    const auto input_sequence_major = inputs[0]->Transpose(0, 1);
     const auto &weight = inputs[1];
     const auto bias = bias_ ? inputs[2] : nullptr;
     const auto &config = global::GetModelParallelConfig();
     auto gemm = [&](const std::shared_ptr<Tensor> &input) {
-      return autograd::linear::Forward(input, weight, bias);
+      return autograd::linear::Forward(input, weight, /*transpose=*/true, bias);
     };
     std::shared_ptr<Tensor> output;
     if (column_parallel_) {
@@ -383,45 +392,48 @@ class LinearWithGradAccumulationAndAsyncCommunication
       if (config.tp_comm_overlap && config.tp_comm_overlap_ag &&
           !disable_pipeline_) {
         output =
-            AllGatherGemm(input_sequence_major_, tp_group_, gathered, gemm);
+            AllGatherWhileGemm(input_sequence_major, tp_group_, gathered, gemm);
       } else {
-        gathered = GatherSequenceMajor(input_sequence_major_, tp_group_);
+        gathered = GatherSequenceMajor(input_sequence_major, tp_group_);
         output = gemm(gathered);
       }
     } else if (config.tp_comm_overlap && config.tp_comm_overlap_rs) {
       std::vector<std::shared_ptr<Tensor>> partials;
       std::shared_ptr<Work> work;
-      output = GemmReduceScatter(input_sequence_major_, tp_group_, partials,
-                                 work, gemm);
+      output = GemmWhileReduceScatter(input_sequence_major, tp_group_, partials,
+                                      work, gemm);
       work->WaitNonBlocking();
     } else {
-      output = ReduceScatterAlongFirstDim(gemm(input_sequence_major_));
+      output = ReduceScatterAlongFirstDim(gemm(input_sequence_major));
     }
+    // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
     return {output->Transpose(0, 1)};
   }
 
   void SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
                     const std::vector<std::shared_ptr<Tensor>> &) override {
-    auto input_sequence_major = std::move(input_sequence_major_);
     const auto &needs_input_grad = ctx_.needs_input_grad();
     if (needs_input_grad.empty()) {
       return;
     }
     const bool need_input = needs_input_grad[0];
     const bool need_weight = needs_input_grad[1];
-    ctx_.SaveForBackward({need_weight ? input_sequence_major : nullptr,
-                          need_input ? inputs[1] : nullptr});
+    ctx_.SaveForBackward(
+        {need_weight ? inputs[0] : nullptr, need_input ? inputs[1] : nullptr});
     in_features_ = inputs[1]->Dims()[1];
     out_features_ = inputs[1]->Dims()[0];
-    input_sequence_major_dims_ = input_sequence_major->Dims();
+    input_sequence_major_dims_ = inputs[0]->Dims();
+    // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+    std::swap(input_sequence_major_dims_[0], input_sequence_major_dims_[1]);
   }
 
   std::vector<std::shared_ptr<Tensor>> Backward(
       const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override {
     CHECK_EQ(grad_outputs.size(), 1);
+    // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
     auto grad_output_sequence_major = grad_outputs[0]->Transpose(0, 1);
     const auto saved = ctx_.GetSavedTensors();
-    const auto &saved_input_sequence_major = saved[0];
+    const auto &saved_input = saved[0];
     const auto &weight = saved[1];
     const bool need_input = ctx_.needs_input_grad()[0];
     const bool need_weight = ctx_.needs_input_grad()[1];
@@ -431,15 +443,17 @@ class LinearWithGradAccumulationAndAsyncCommunication
     auto dgrad = [&](const std::shared_ptr<Tensor> &grad_output) {
       auto dims = grad_output->Dims();
       dims.back() = in_features_;
-      return autograd::linear::BackwardInput(weight, grad_output, dims);
+      return autograd::linear::BackwardInput(weight, grad_output,
+                                             /*transpose=*/true, in_features_,
+                                             out_features_, dims);
     };
 
     std::shared_ptr<Tensor> grad_input;
     if (!column_parallel_) {
       if (need_input && config.tp_comm_overlap && config.tp_comm_overlap_ag) {
         std::shared_ptr<Tensor> gathered;
-        grad_input = AllGatherGemm(grad_output_sequence_major, tp_group_,
-                                   gathered, dgrad);
+        grad_input = AllGatherWhileGemm(grad_output_sequence_major, tp_group_,
+                                        gathered, dgrad);
         grad_output_sequence_major = gathered;
       } else if (need_input || need_weight) {
         grad_output_sequence_major =
@@ -450,11 +464,16 @@ class LinearWithGradAccumulationAndAsyncCommunication
       }
     }
 
-    std::shared_ptr<Tensor> input_sequence_major = saved_input_sequence_major;
+    // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
+    const auto local_input_sequence_major =
+        need_weight ? saved_input->Transpose(0, 1) : nullptr;
+    // Keep the send buffer alive until the asynchronous AllGather is joined
+    // onto the compute stream; Work does not retain tensor storage.
+    auto input_sequence_major = local_input_sequence_major;
     std::shared_ptr<Work> input_gather_work;
     if (need_weight && column_parallel_) {
       input_sequence_major = GatherSequenceMajor(
-          saved_input_sequence_major, tp_group_,
+          local_input_sequence_major, tp_group_,
           config.tp_comm_overlap && config.tp_comm_bulk_wgrad
               ? &input_gather_work
               : nullptr);
@@ -469,8 +488,9 @@ class LinearWithGradAccumulationAndAsyncCommunication
                            (need_weight || need_bias);
       if (config.tp_comm_overlap && config.tp_comm_overlap_rs_dgrad &&
           !disable_pipeline_) {
-        grad_input = GemmReduceScatter(grad_output_sequence_major, tp_group_,
-                                       partials, reduce_scatter_work, dgrad);
+        grad_input =
+            GemmWhileReduceScatter(grad_output_sequence_major, tp_group_,
+                                   partials, reduce_scatter_work, dgrad);
         if (!bulk_rs) {
           reduce_scatter_work->WaitNonBlocking();
           reduce_scatter_work.reset();
@@ -492,7 +512,7 @@ class LinearWithGradAccumulationAndAsyncCommunication
     auto grad_weight =
         need_weight ? autograd::linear::BackwardWeight(
                           input_sequence_major, grad_output_sequence_major,
-                          in_features_, out_features_)
+                          /*transpose=*/true, in_features_, out_features_)
                     : nullptr;
     auto grad_bias = need_bias ? autograd::linear::BackwardBias(
                                      grad_output_sequence_major, out_features_)
@@ -501,6 +521,7 @@ class LinearWithGradAccumulationAndAsyncCommunication
       reduce_scatter_work->WaitNonBlocking();
     }
     if (grad_input) {
+      // FIXME(zbl): Megatron-LM keeps tensor as [S, B, H] by default
       grad_input = grad_input->Transpose(0, 1);
     }
     return bias_
@@ -517,7 +538,6 @@ class LinearWithGradAccumulationAndAsyncCommunication
   int64_t in_features_ = 0;
   int64_t out_features_ = 0;
   std::vector<int64_t> input_sequence_major_dims_;
-  std::shared_ptr<Tensor> input_sequence_major_;
 };
 
 }  // namespace

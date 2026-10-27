@@ -14,18 +14,22 @@ namespace infini_train::autograd {
 
 // Raw dispatcher operations for custom autograd Functions. These calls do not
 // create autograd nodes.
+// Like the kernels, transpose=true uses weight[out, in]; false uses weight[in,
+// out].
 namespace linear {
 std::shared_ptr<Tensor> Forward(const std::shared_ptr<Tensor> &input,
                                 const std::shared_ptr<Tensor> &weight,
+                                bool transpose,
                                 const std::shared_ptr<Tensor> &bias = nullptr);
 std::shared_ptr<Tensor> BackwardInput(
     const std::shared_ptr<Tensor> &weight,
-    const std::shared_ptr<Tensor> &grad_output,
+    const std::shared_ptr<Tensor> &grad_output, bool transpose,
+    int64_t in_features, int64_t out_features,
     const std::vector<int64_t> &input_dims);
 std::shared_ptr<Tensor> BackwardWeight(
     const std::shared_ptr<Tensor> &input,
-    const std::shared_ptr<Tensor> &grad_output, int64_t in_features,
-    int64_t out_features);
+    const std::shared_ptr<Tensor> &grad_output, bool transpose,
+    int64_t in_features, int64_t out_features);
 std::shared_ptr<Tensor> BackwardBias(const std::shared_ptr<Tensor> &grad_output,
                                      int64_t out_features);
 }  // namespace linear
