@@ -1,8 +1,8 @@
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 
-#include <algorithm>
 #include <cstddef>
 #include <memory>
+#include <ostream>
 #include <vector>
 
 #include "glog/logging.h"

@@ -12,7 +12,6 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
