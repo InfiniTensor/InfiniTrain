@@ -216,7 +216,7 @@ float DistributedOptimizer::learning_rate() const {
   return Optimizer::learning_rate();
 }
 
-void DistributedOptimizer::Step() {
+void DistributedOptimizer::StepImpl() {
   CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
   base_optimizer_->Step();
 

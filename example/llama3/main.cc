@@ -87,6 +87,16 @@ DEFINE_uint32(text_length, 64, "the length of the generated text");
 DEFINE_double(learning_rate, 1e-5, "Peak learning rate.");
 DEFINE_int32(zero_stage, 0,
              "ZeRO stage (0/1/2/3); 0 disables DistributedOptimizer");
+DEFINE_bool(optimizer_cpu_offload, false,
+            "Offload optimizer state and local optimizer params to CPU.");
+DEFINE_double(
+    optimizer_offload_fraction, 1.0,
+    "Fraction of local non-CPU optimizer params to offload to CPU, in [0, 1].");
+DEFINE_bool(optimizer_cpu_offload_pin_memory, false,
+            "Request pinned CPU memory for optimizer offload buffers. "
+            "Currently unsupported and rejected.");
+DEFINE_bool(overlap_cpu_optimizer_d2h_h2d, true,
+            "Request D2H/CPU step/H2D overlap for optimizer CPU offload.");
 // lr scheduler
 DEFINE_double(min_lr, 0.0, "Minimum learning rate.");
 DEFINE_string(
@@ -176,12 +186,32 @@ DEFINE_validator(device, [](const char *, const std::string &value) {
 DEFINE_validator(zero_stage, [](const char *, int32_t value) {
   return value >= 0 && value <= 3;
 });
+DEFINE_validator(optimizer_offload_fraction, [](const char *, double value) {
+  return value >= 0.0 && value <= 1.0;
+});
 DEFINE_validator(lr_decay_style, [](const char *, const std::string &value) {
   return kSupportedLRDecayStyles.contains(value);
 });
 
 void Train(const nn::parallel::Rank &rank) {
   using namespace nn::parallel;
+
+  if (FLAGS_optimizer_cpu_offload) {
+    // TODO(zbl): Support hybrid optimizer state in the sharded checkpoint
+    // planner.
+    if (!FLAGS_save.empty() && FLAGS_save_optimizer_state) {
+      LOG(FATAL)
+          << "HDO optimizer state cannot be saved by the sharded checkpoint "
+             "planner yet; use --save_optimizer_state=false to save model "
+             "weights and training metadata only.";
+    }
+    if (!FLAGS_load.empty() && FLAGS_load_optimizer_state) {
+      LOG(FATAL)
+          << "HDO optimizer state cannot be loaded by the sharded checkpoint "
+             "planner yet; use --load_optimizer_state=false to load model "
+             "weights with fresh optimizer state.";
+    }
+  }
 
   {
     if (rank.IsLastRank()) {
@@ -395,10 +425,28 @@ void Train(const nn::parallel::Rank &rank) {
     tokenizer = std::make_unique<Tokenizer>(FLAGS_tokenizer_bin);
   }
 
-  // TODO(dcj): support more complex optimizer later
-  // auto optimizer = optimizers::Adam(model->Parameters(),
-  // FLAGS_learning_rate);
-  auto optimizer_creator = optimizers::Adam::CreateNamed(FLAGS_learning_rate);
+  OptimizerCreatorNamed optimizer_creator =
+      optimizers::Adam::CreateNamed(FLAGS_learning_rate);
+  std::shared_ptr<optimizers::HybridDeviceOptimizer> hybrid_optimizer;
+  if (FLAGS_optimizer_cpu_offload) {
+    optimizer_creator = [&hybrid_optimizer](
+                            const NamedParameterList &named_params) {
+      std::vector<std::shared_ptr<Tensor>> params;
+      params.reserve(named_params.size());
+      for (const auto &[name, param] : named_params) {
+        params.push_back(param);
+      }
+      // Keep access to HDO when DistributedOptimizer wraps it for local shards.
+      hybrid_optimizer = std::make_shared<optimizers::HybridDeviceOptimizer>(
+          params, static_cast<float>(FLAGS_optimizer_offload_fraction),
+          optimizers::Adam::Create(FLAGS_learning_rate),
+          optimizers::Adam::Create(FLAGS_learning_rate),
+          /*param_update_in_fp32=*/true, FLAGS_optimizer_cpu_offload_pin_memory,
+          FLAGS_optimizer_cpu_offload_pin_memory,
+          FLAGS_overlap_cpu_optimizer_d2h_h2d);
+      return hybrid_optimizer;
+    };
+  }
   std::shared_ptr<Optimizer> optimizer = nullptr;
 
   std::vector<std::shared_ptr<Tensor>> params_to_optimize;
@@ -470,6 +518,10 @@ void Train(const nn::parallel::Rank &rank) {
        .model_config = model_config,
        .state = state,
        .lr_scheduler = scheduler});
+
+  if (hybrid_optimizer && !FLAGS_load.empty() && !FLAGS_load_optimizer_state) {
+    hybrid_optimizer->ReloadModelParams();
+  }
 
   start_step = resume_result.global_step;
   size_t consumed_train_samples = resume_result.consumed_train_samples;
