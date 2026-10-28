@@ -15,6 +15,10 @@
 #include "infini_train/include/tensor.h"
 
 namespace infini_train::nn::parallel {
+class ProcessGroup;
+}  // namespace infini_train::nn::parallel
+
+namespace infini_train::nn::parallel {
 DistributedOptimizer::DistributedOptimizer(
     OptimizerCreator creator,
     const std::vector<std::shared_ptr<Tensor>> &full_params,
