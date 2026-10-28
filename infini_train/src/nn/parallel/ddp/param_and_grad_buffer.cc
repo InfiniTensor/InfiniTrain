@@ -188,16 +188,18 @@ ParamAndGradBucketGroup::ParamAndGradBucketGroup(
           shard_numel, bucket->grad_dtype(), param->GetDevice());
     }
   }
+
+  // Every rank starts with a complete parameter replica. The first gather is
+  // needed only after an optimizer update.
+  param_gather_dispatched_ = ddp_config_.zero_stage >= 1;
 }
 
 void ParamAndGradBucketGroup::Reset() {
   params_with_grad_.clear();
   grad_reduce_work_list_.clear();
   grad_reduce_bucket_indices_.clear();
-  param_gather_work_list_.clear();
   is_last_microbatch_ = true;
   grad_reduce_dispatched_ = false;
-  param_gather_dispatched_ = false;
 
   if (ddp_config_.zero_stage >= 2) {
     std::fill(temp_full_grad_buffer_list_.begin(),
@@ -470,23 +472,28 @@ void ParamAndGradBucketGroup::FinishGradSync() {
 void ParamAndGradBucketGroup::StartParamSync(bool force_sync) {
   CHECK(ddp_config_.zero_stage >= 1);
 
-  if (collective_pg_size_ == 1) {
-    param_gather_dispatched_ = !force_sync;
-    return;
-  }
-  CHECK(collective_pg_) << "ParamAndGradBucketGroup: StartParamSync called "
-                           "with null collective_pg_.";
-
   if (force_sync) {
     // force synchronous collective regardless of other settings
     for (auto work : param_gather_work_list_) {
       work->WaitNonBlocking();
     }
     param_gather_work_list_.clear();
-    return;
+    if (param_gather_dispatched_) {
+      return;
+    }
   } else {
     CHECK(param_gather_work_list_.empty());
+    CHECK(!param_gather_dispatched_)
+        << "ParamAndGradBucketGroup: parameter all-gather has already been "
+           "dispatched for this update.";
   }
+
+  if (collective_pg_size_ == 1) {
+    param_gather_dispatched_ = true;
+    return;
+  }
+  CHECK(collective_pg_) << "ParamAndGradBucketGroup: StartParamSync called "
+                           "with null collective_pg_.";
 
   auto async_op = ddp_config_.overlap_param_gather && (!force_sync);
 
@@ -502,8 +509,11 @@ void ParamAndGradBucketGroup::StartParamSync(bool force_sync) {
           ShardBuffer(param_buffer, collective_pg_size_);
     }
     auto local_data_view = param_buffer_shard_list_[i][rank_in_collective_pg_];
-    param_gather_work_list_.push_back(
-        collective_pg_->AllGather(param_buffer, local_data_view, async_op));
+    auto work =
+        collective_pg_->AllGather(param_buffer, local_data_view, async_op);
+    if (work) {
+      param_gather_work_list_.push_back(std::move(work));
+    }
   }
 
   param_gather_dispatched_ = true;
@@ -531,7 +541,6 @@ void ParamAndGradBucketGroup::FinishParamSync(bool skip_next_bucket_dispatch) {
       work->WaitNonBlocking();
     }
     param_gather_work_list_.clear();
-    param_gather_dispatched_ = false;
 
     if (next_param_gather_bucket_group_ && !skip_next_bucket_dispatch) {
       if (next_param_gather_bucket_group_->param_gather_dispatched_) {
@@ -546,6 +555,14 @@ void ParamAndGradBucketGroup::FinishParamSync(bool skip_next_bucket_dispatch) {
       }
     }
   }
+}
+
+void ParamAndGradBucketGroup::PrepareParamSyncForNextStep() {
+  for (auto &work : param_gather_work_list_) {
+    work->WaitNonBlocking();
+  }
+  param_gather_work_list_.clear();
+  param_gather_dispatched_ = false;
 }
 
 void ParamAndGradBucketGroup::SetNextParamGatherBucketGroup(

@@ -35,32 +35,36 @@ MLP::MLP(const TransformerConfig &config, bool is_expert)
   CHECK_GT(ffn_hidden, 0);
 
   // c_fc: ColumnParallel (input full, output parallel)
-  modules_[kCFcLayerName] = std::make_shared<parallel::ColumnParallelLinear>(
-      /*in_features=*/config.n_embd,
-      /*out_features=*/config.activation_type == MLPType::kSwiGLU
-          ? 2 * ffn_hidden
-          : ffn_hidden,
-      /*bias=*/config.add_bias_linear,
-      /*gather_output=*/false,
-      /*input_is_parallel=*/false,
-      /*skip_bias_add=*/false,
-      /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled());
+  RegisterModule(kCFcLayerName,
+                 std::make_shared<parallel::ColumnParallelLinear>(
+                     /*in_features=*/config.n_embd,
+                     /*out_features=*/config.activation_type == MLPType::kSwiGLU
+                         ? 2 * ffn_hidden
+                         : ffn_hidden,
+                     /*bias=*/config.add_bias_linear,
+                     /*gather_output=*/false,
+                     /*input_is_parallel=*/false,
+                     /*skip_bias_add=*/false,
+                     /*sequence_parallel=*/
+                     parallel::global::GetSequenceParallelEnabled()));
 
   // Activation: check for GELU or SwiGLU
   if (config.activation_type == MLPType::kGELU) {
-    modules_[kGeluLayerName] = std::make_shared<NewGELU>();
+    RegisterModule(kGeluLayerName, std::make_shared<NewGELU>());
   } else if (config.activation_type == MLPType::kSwiGLU) {
-    modules_[kSwiGLULayerName] = std::make_shared<SwiGLU>();
+    RegisterModule(kSwiGLULayerName, std::make_shared<SwiGLU>());
   }
 
   // c_proj: RowParallel (input parallel, output full)
-  modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
-      /*in_features=*/ffn_hidden, /*out_features=*/config.n_embd,
-      /*bias=*/config.add_bias_linear,
-      /*reduce_output=*/true,
-      /*input_is_parallel=*/true,
-      /*skip_bias_add=*/false,
-      /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+  RegisterModule(kCProjLayerName,
+                 std::make_shared<nn::parallel::RowParallelLinear>(
+                     /*in_features=*/ffn_hidden, /*out_features=*/config.n_embd,
+                     /*bias=*/config.add_bias_linear,
+                     /*reduce_output=*/true,
+                     /*input_is_parallel=*/true,
+                     /*skip_bias_add=*/false,
+                     /*sequence_parallel=*/
+                     nn::parallel::global::GetSequenceParallelEnabled()));
 
   const bool use_expert_process_groups =
       is_expert && (parallel::global::GetExpertParallelSize() > 1 ||

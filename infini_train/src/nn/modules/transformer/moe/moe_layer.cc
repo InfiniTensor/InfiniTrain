@@ -57,9 +57,9 @@ MoELayer::MoELayer(const TransformerConfig &config)
   num_local_experts_ = moe_config.num_experts / expert_parallel_size;
   CHECK_GT(num_local_experts_, 0);
 
-  modules_[kRouterLayerName] = std::make_shared<TopKRouter>(config_);
-  modules_[kExpertsLayerName] =
-      std::make_shared<SequentialMLP>(num_local_experts_, config_);
+  RegisterModule(kRouterLayerName, std::make_shared<TopKRouter>(config_));
+  RegisterModule(kExpertsLayerName,
+                 std::make_shared<SequentialMLP>(num_local_experts_, config_));
 }
 
 std::vector<std::shared_ptr<Tensor>> MoELayer::Forward(

@@ -295,17 +295,18 @@ ColumnParallelLinear::ColumnParallelLinear(
   output_size_per_partition_ = out_features / tp_size;
 
   // init params shards on local rank
-  parameters_[kParamWeightName] =
+  RegisterParameter(
+      kParamWeightName,
       std::make_shared<Tensor>(
           std::vector<int64_t>{output_size_per_partition_, in_features},
           DataType::kFLOAT32, device_)
-          ->RequiresGrad();
+          ->RequiresGrad());
   if (bias) {
-    parameters_[kParamBiasName] =
-        std::make_shared<Tensor>(
-            std::vector<int64_t>{output_size_per_partition_},
-            DataType::kFLOAT32, device_)
-            ->RequiresGrad();
+    RegisterParameter(kParamBiasName,
+                      std::make_shared<Tensor>(
+                          std::vector<int64_t>{output_size_per_partition_},
+                          DataType::kFLOAT32, device_)
+                          ->RequiresGrad());
   }
 
   LinearResetParameters(parameters_[kParamWeightName],
@@ -423,16 +424,17 @@ RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features,
   }
 
   // init params shards on local rank
-  parameters_[kParamWeightName] =
+  RegisterParameter(
+      kParamWeightName,
       std::make_shared<Tensor>(
           std::vector<int64_t>{out_features, input_size_per_partition_},
           DataType::kFLOAT32, device_)
-          ->RequiresGrad();
+          ->RequiresGrad());
   if (bias) {
-    parameters_[kParamBiasName] =
-        std::make_shared<Tensor>(std::vector<int64_t>{out_features},
-                                 DataType::kFLOAT32, device_)
-            ->RequiresGrad();
+    RegisterParameter(kParamBiasName, std::make_shared<Tensor>(
+                                          std::vector<int64_t>{out_features},
+                                          DataType::kFLOAT32, device_)
+                                          ->RequiresGrad());
     if (sequence_parallel_) {
       parameters_[kParamBiasName]->set_sequence_parallel(true);
     }
@@ -540,11 +542,12 @@ VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings,
       static_cast<int64_t>(tp_rank) * vocab_size_per_partition_;
   vocab_end_index_ = vocab_start_index_ + vocab_size_per_partition_;
 
-  parameters_[kParamWeightName] =
+  RegisterParameter(
+      kParamWeightName,
       std::make_shared<Tensor>(
           std::vector<int64_t>{vocab_size_per_partition_, embedding_dim_},
           DataType::kFLOAT32, device_)
-          ->RequiresGrad();
+          ->RequiresGrad());
 }
 
 std::vector<std::shared_ptr<Tensor>> VocabParallelEmbedding::Forward(

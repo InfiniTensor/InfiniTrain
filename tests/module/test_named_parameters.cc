@@ -45,8 +45,8 @@ TEST_P(ModuleNamedParametersTest,
 
   const auto deduplicated = root->NamedParameters("model");
   ASSERT_EQ(deduplicated.size(), 2);
-  EXPECT_EQ(deduplicated[0].first, "model.0.bias");
-  EXPECT_EQ(deduplicated[1].first, "model.0.weight");
+  EXPECT_EQ(deduplicated[0].first, "model.0.weight");
+  EXPECT_EQ(deduplicated[1].first, "model.0.bias");
   std::unordered_set<const Tensor *> tensors;
   for (const auto &[name, parameter] : deduplicated) {
     tensors.insert(parameter.get());
@@ -64,7 +64,7 @@ TEST_P(ModuleNamedParametersTest,
   EXPECT_EQ(by_name.at("model.0.bias"), by_name.at("model.1.bias"));
 }
 
-TEST_P(ModuleNamedParametersTest, ReturnsNestedParametersInStableNameOrder) {
+TEST_P(ModuleNamedParametersTest, ReturnsNestedParametersInRegistrationOrder) {
   auto first = std::make_shared<nn::Linear>(2, 3, /*bias=*/false, GetDevice());
   auto second = std::make_shared<nn::Linear>(3, 4, /*bias=*/false, GetDevice());
   auto nested = std::make_shared<nn::Sequential>(

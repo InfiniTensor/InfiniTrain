@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <ostream>
+#include <unordered_set>
 #include <utility>
 
 #include "glog/logging.h"
@@ -12,6 +13,10 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/ddp/param_and_grad_buffer.h"
 #include "infini_train/include/tensor.h"
+
+namespace infini_train::nn::parallel {
+class ProcessGroup;
+}  // namespace infini_train::nn::parallel
 
 namespace infini_train::nn::parallel {
 DistributedOptimizer::DistributedOptimizer(
@@ -85,6 +90,14 @@ void DistributedOptimizer::InitializeModelChunks(
     bucket_groups_.insert(bucket_groups_.end(),
                           ddp_chunk->bucket_groups().begin(),
                           ddp_chunk->bucket_groups().end());
+
+    std::unordered_set<const ProcessGroup *> seen_process_groups;
+    for (auto it = ddp_chunk->bucket_groups().rbegin();
+         it != ddp_chunk->bucket_groups().rend(); ++it) {
+      if (seen_process_groups.insert((*it)->process_group()).second) {
+        first_param_sync_bucket_groups_.push_back(*it);
+      }
+    }
   }
 }
 
@@ -217,13 +230,26 @@ float DistributedOptimizer::learning_rate() const {
 }
 
 void DistributedOptimizer::Step() {
+  // Parameter gathers from the previous update must finish before the
+  // optimizer writes into the same buffers.
+  for (auto &group : bucket_groups_) {
+    group->PrepareParamSyncForNextStep();
+  }
+
   CHECK(base_optimizer_) << "DistributedOptimizer: base optimizer is null.";
   base_optimizer_->Step();
 
-  // Gather updated param shards back to full params
-  StartParamSync(/*force_sync=*/false);
-  // TODO(zbl): Delay sync call until param is actually used in next step
-  FinishParamSync(/*skip_next_bucket_dispatch=*/true);
+  // Publish updated parameter shards. With overlap enabled, launch the first
+  // gather in each model chunk and process-group chain. Forward pre-hooks wait
+  // at first use and dispatch subsequent bucket gathers.
+  CHECK(!bucket_groups_.empty());
+  if (bucket_groups_.front()->config().overlap_param_gather) {
+    for (auto &group : first_param_sync_bucket_groups_) {
+      group->StartParamSync();
+    }
+  } else {
+    StartParamSync(/*force_sync=*/false);
+  }
 }
 
 std::unordered_map<std::string, std::shared_ptr<Tensor>>

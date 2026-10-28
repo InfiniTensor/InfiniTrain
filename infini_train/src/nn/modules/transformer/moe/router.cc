@@ -24,21 +24,23 @@ TopKRouter::TopKRouter(const TransformerConfig &config)
   CHECK_GT(moe_config.num_experts, 0);
   CHECK_GT(moe_config.router_topk, 0);
   CHECK_LE(moe_config.router_topk, moe_config.num_experts);
-  parameters_[kParamWeightName] =
+  RegisterParameter(
+      kParamWeightName,
       std::make_shared<Tensor>(
           std::vector<int64_t>{moe_config.num_experts, config_.n_embd},
           DataType::kFLOAT32, device_)
-          ->RequiresGrad();
+          ->RequiresGrad());
   if (parallel::global::GetSequenceParallelEnabled()) {
     parameters_[kParamWeightName]->set_sequence_parallel(true);
   }
   init::KaimingUniform(parameters_[kParamWeightName]);
 
   if (config_.add_bias_linear) {
-    parameters_[kParamBiasName] =
+    RegisterParameter(
+        kParamBiasName,
         std::make_shared<Tensor>(std::vector<int64_t>{moe_config.num_experts},
                                  DataType::kFLOAT32, device_)
-            ->RequiresGrad();
+            ->RequiresGrad());
     if (parallel::global::GetSequenceParallelEnabled()) {
       parameters_[kParamBiasName]->set_sequence_parallel(true);
     }

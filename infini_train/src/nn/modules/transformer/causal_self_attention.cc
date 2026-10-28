@@ -29,10 +29,10 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config)
   SetupAttention(config);
 
   if (config_.qk_layernorm) {
-    modules_[kQNormLayerName] =
-        std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps);
-    modules_[kKNormLayerName] =
-        std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps);
+    RegisterModule(kQNormLayerName,
+                   std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps));
+    RegisterModule(kKNormLayerName,
+                   std::make_shared<nn::RMSNorm>(head_dim_, config_.norm_eps));
     // NOTE(zbl): In Qwen3-8B, Q/K norm sees full sequences and TP-local heads.
     //            So we only need to finalize its replicated weights across TP
     //            regardless of SP.
@@ -46,25 +46,28 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config)
 
   int64_t qkv_dim = (config.n_head + 2 * n_kv_head_) * head_dim_;
   // qkv: ColumnParallel (do not gather output)
-  modules_[kCAttnLayerName] = std::make_shared<
-      nn::parallel::ColumnParallelLinear>(
-      /*in_features=*/n_embd_,
-      /*out_features=*/qkv_dim,
-      /*bias=*/config_.add_bias_linear,
-      /*gather_output=*/false,
-      /*input_is_parallel=*/false,
-      /*skip_bias_add=*/false,
-      /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+  RegisterModule(kCAttnLayerName,
+                 std::make_shared<nn::parallel::ColumnParallelLinear>(
+                     /*in_features=*/n_embd_,
+                     /*out_features=*/qkv_dim,
+                     /*bias=*/config_.add_bias_linear,
+                     /*gather_output=*/false,
+                     /*input_is_parallel=*/false,
+                     /*skip_bias_add=*/false,
+                     /*sequence_parallel=*/
+                     nn::parallel::global::GetSequenceParallelEnabled()));
 
   // proj: RowParallel (input is parallel and output is full)
-  modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(
-      /*in_features=*/n_embd_,
-      /*out_features=*/n_embd_,
-      /*bias=*/config_.add_bias_linear,
-      /*reduce_output=*/true,
-      /*input_is_parallel=*/true,
-      /*skip_bias_add=*/false,
-      /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled());
+  RegisterModule(kCProjLayerName,
+                 std::make_shared<nn::parallel::RowParallelLinear>(
+                     /*in_features=*/n_embd_,
+                     /*out_features=*/n_embd_,
+                     /*bias=*/config_.add_bias_linear,
+                     /*reduce_output=*/true,
+                     /*input_is_parallel=*/true,
+                     /*skip_bias_add=*/false,
+                     /*sequence_parallel=*/
+                     nn::parallel::global::GetSequenceParallelEnabled()));
 
   // FIXME(zbl): Decouple causal-mask ownership from position embedding. For
   // now, only learned-absolute models use
@@ -72,10 +75,10 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config)
   //             mask.
   if (config_.position_embedding_type ==
       PositionEmbeddingType::kLearnedAbsolute) {
-    buffers_[kParamBiasName] =
-        function::Tril(
-            nn::function::Ones({config_.block_size, config_.block_size}))
-            ->View({1, 1, config_.block_size, config_.block_size});
+    RegisterBuffer(kParamBiasName,
+                   function::Tril(nn::function::Ones(
+                                      {config_.block_size, config_.block_size}))
+                       ->View({1, 1, config_.block_size, config_.block_size}));
   }
 }
 

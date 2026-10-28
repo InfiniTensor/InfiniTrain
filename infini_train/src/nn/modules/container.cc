@@ -3,6 +3,7 @@
 #include <memory>
 #include <ostream>
 #include <string>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -13,7 +14,7 @@ Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers)
     : CloneableModule(kType) {
   int idx = 0;
   for (auto &layer : layers) {
-    modules_[std::to_string(idx)] = std::move(layer);
+    RegisterModule(std::to_string(idx), std::move(layer));
     ++idx;
   }
 }
@@ -27,11 +28,9 @@ std::vector<std::shared_ptr<Tensor>> Sequential::Forward(
   return x;
 }
 
-ModuleDict::ModuleDict(
-    std::unordered_map<std::string, std::shared_ptr<Module>> modules)
-    : CloneableModule(kType) {
+ModuleDict::ModuleDict(std::vector<Item> modules) : CloneableModule(kType) {
   for (auto &[name, layer] : modules) {
-    modules_[name] = std::move(layer);
+    RegisterModule(name, std::move(layer));
   }
 }
 
@@ -44,7 +43,7 @@ ModuleList::ModuleList(std::vector<std::shared_ptr<Module>> &&layers)
     : CloneableModule(kType), module_list_(std::move(layers)) {
   int idx = 0;
   for (auto &layer : module_list_) {
-    modules_[std::to_string(idx)] = layer;
+    RegisterModule(std::to_string(idx), layer);
     ++idx;
   }
 }

@@ -8,6 +8,8 @@
 #include <ostream>
 #include <string>
 #include <tuple>
+#include <type_traits>
+#include <unordered_set>
 #include <utility>
 #include <vector>
 
@@ -117,11 +119,14 @@ DistributedDataParallel::DistributedDataParallel(
   for (auto &buffer : module->Buffers()) {
     validate_device(buffer->GetDevice(), "buffer");
   }
-  modules_[kModuleName] = std::move(module);
+  RegisterModule(kModuleName, std::move(module));
 
   if (ddp_config.zero_stage >= 1) {
     BuildParamAndGradBuffers(trainable_params);
     RegisterBackwardHooks(trainable_params);
+    if (ddp_config_.overlap_param_gather) {
+      RegisterForwardPreHooks();
+    }
   } else if (ddp_config.gradient_bucketing_enabled &&
              deferred_sync_params_.empty()) {
     // Bucket Assignment
@@ -147,6 +152,39 @@ DistributedDataParallel::DistributedDataParallel(
         reducers_.push_back(std::move(reducer));
       }
     }
+  }
+}
+
+void DistributedDataParallel::RegisterForwardPreHooks() {
+  auto &model = modules_.at(kModuleName);
+  for (auto &module : model->modules()) {
+    std::unordered_set<ParamAndGradBucketGroup *> required_groups;
+    for (const auto &param : module->Parameters(/*recurse=*/false)) {
+      const auto it = param_to_bucket_group_.find(param.get());
+      if (it != param_to_bucket_group_.end()) {
+        required_groups.insert(it->second.get());
+      }
+    }
+    if (required_groups.empty()) {
+      continue;
+    }
+
+    std::vector<std::weak_ptr<ParamAndGradBucketGroup>> ordered_groups;
+    for (auto it = bucket_groups_.rbegin(); it != bucket_groups_.rend(); ++it) {
+      if (required_groups.contains(it->get())) {
+        ordered_groups.emplace_back(*it);
+      }
+    }
+
+    module->RegisterForwardPreHook(
+        [groups = std::move(ordered_groups)](
+            nn::Module *, const std::vector<std::shared_ptr<Tensor>> &) {
+          for (const auto &weak_group : groups) {
+            if (auto group = weak_group.lock()) {
+              group->FinishParamSync();
+            }
+          }
+        });
   }
 }
 
