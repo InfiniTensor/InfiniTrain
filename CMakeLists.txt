@@ -72,6 +72,9 @@ endif()
 # Framework core sources (*.cc), excluding cpu kernels (they are built separately)
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
+# CLI flags are opt-in: linking the core must not register names such as
+# --device or --batch_size that applications may define themselves.
+list(FILTER SRC EXCLUDE REGEX ".*/training/arguments\\.cc$")
 
 # Exclude backend-specific runtime/ccl translation units when the corresponding
 # backend is disabled. This keeps each build self-contained and avoids pulling
@@ -229,51 +232,19 @@ add_library(InfiniTrain::infini_train_executable ALIAS infini_train_executable)
 unset(_infini_train_executable_archives)
 
 # ------------------------------------------------------------------------------
+# Training CLI (opt-in for applications)
+# ------------------------------------------------------------------------------
+
+add_library(infini_train_training_cli STATIC infini_train/src/training/arguments.cc)
+add_library(InfiniTrain::training_cli ALIAS infini_train_training_cli)
+target_link_libraries(infini_train_training_cli PUBLIC InfiniTrain::infini_train)
+
+# ------------------------------------------------------------------------------
 # Examples
 # ------------------------------------------------------------------------------
 
 if(PROJECT_IS_TOP_LEVEL)
-add_executable(mnist
-  example/mnist/main.cc
-  example/mnist/dataset.cc
-  example/mnist/net.cc
-)
-link_infini_train_exe(mnist)
-
-add_executable(gpt2
-  example/gpt2/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/common/tokenizer.cc
-  example/gpt2/checkpoint_loader.cc
-)
-link_infini_train_exe(gpt2)
-
-add_executable(mixtral
-  example/mixtral/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/mixtral/checkpoint_loader.cc
-)
-link_infini_train_exe(mixtral)
-
-add_executable(llama3
-  example/llama3/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/common/tokenizer.cc
-  example/llama3/checkpoint_loader.cc
-)
-link_infini_train_exe(llama3)
-
-add_executable(qwen3
-  example/qwen3/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/qwen3/checkpoint_loader.cc
-  example/common/tokenizer.cc
-)
-link_infini_train_exe(qwen3)
+  add_subdirectory(example)
 endif()
 
 # Tools
