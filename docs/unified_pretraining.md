@@ -1,10 +1,10 @@
 # 统一 GPT 预训练入口设计
 
-统一训练入口将 GPT-2、LLaMA3、Qwen3 的训练过程组织为一套框架生命周期。任务入口负责提供模型、数据和计算逻辑，`infini_train::training::Pretrain()` 负责执行这些逻辑，并管理并行包装、优化器、学习率调度和训练状态。
+统一训练入口将 GPT-2、LLaMA3、Qwen3、Mixtral 的训练过程组织为一套框架生命周期。任务入口负责提供模型、数据和计算逻辑，`infini_train::training::Pretrain()` 负责执行这些逻辑，并管理并行包装、优化器、学习率调度和训练状态。
 
-三个模型都基于 `nn::TransformerModel`，架构由 `TransformerConfig` 描述。这一共同基础使模型特例可以通过 provider 接入统一训练流程。开发者增加模型时维护模型目录，增加训练能力时维护框架训练层。
+四个模型都基于 `nn::TransformerModel`，架构由 `TransformerConfig` 描述。这一共同基础使模型特例可以通过 provider 接入统一训练流程。开发者增加模型时维护模型目录，增加训练能力时维护框架训练层。
 
-本文以当前实现为准。结构调整的对照基线是 `master` 提交 `a70c996`（`test: align Qwen3 validation case configurations`）。
+本文以当前实现为准。结构调整的对照基线是 `master` 提交 `5a7be78`。
 
 ## 1. 架构与职责
 
@@ -35,11 +35,11 @@ flowchart TD
 | 模型适配 | `example/<model>/` | 提供 `config.h`、`model_provider.cc`、`checkpoint_loader.cc` 和 `train.flags`。 |
 | GPT 数据适配 | `example/common/` | 提供 token 数据读取、tokenizer 和 LLMC 文件格式辅助功能。 |
 
-相对基线，原来分布在三个 `main.cc` 中的职责按下面的方式归集：
+相对基线，原来分布在四个 `main.cc` 中的职责按下面的方式归集：
 
 | 基线中的职责 | 当前归属 |
 | --- | --- |
-| 三个模型各自组织完整训练程序 | 一份 `pretrain_gpt.cc` 组装任务，一份 `Pretrain()` 执行训练。 |
+| 四个模型各自组织完整训练程序 | 一份 `pretrain_gpt.cc` 组装任务，一份 `Pretrain()` 执行训练。 |
 | 入口内部选择模型配置与 loader | 各模型的 provider 向注册表登记构建逻辑。 |
 | 入口中的模型训练默认值 | 各模型目录的 `train.flags`。 |
 | 通用参数、优化器、调度器、数据位置和 checkpoint 管理 | 框架 `training/` 层。 |
@@ -99,13 +99,17 @@ struct ForwardStepResult {
 
 ```cpp
 const auto &models = training::ModelProviderRegistry::Instance();
-const auto model_provider = models.Resolve(FLAGS_model, FLAGS_llmc_filepath);
+const auto recompute = nn::ParseActivationRecomputeOptions(
+    options.activation_recompute, options.recompute_granularity,
+    options.recompute_method, options.recompute_num_layers);
+const auto model_provider = models.Resolve(FLAGS_model, FLAGS_llmc_filepath,
+                                          recompute);
 
 training::Pretrain(options, dataset_provider, model_provider,
                    ForwardStepGPT, after_step);
 ```
 
-`Resolve()` 查找名称、复制 factory 并绑定权重路径，返回一个零参数的 `ModelProvider`。模型实例在训练流程调用该 provider 时创建。这样，模型构建可以读取已经设置好的 TP/PP 状态，并生成当前 rank 的本地层和 VPP chunk。
+`Resolve()` 查找名称、复制 factory 并绑定权重路径与 activation recompute 配置，返回一个零参数的 `ModelProvider`。模型实例在训练流程调用该 provider 时创建。这样，模型构建可以读取已经设置好的 TP/PP/EP 状态，并生成当前 rank 的本地层和 VPP chunk。
 
 各模型的实现集中在自己的目录：
 
@@ -114,12 +118,13 @@ training::Pretrain(options, dataset_provider, model_provider,
 | GPT-2 | [model_provider.cc](../example/gpt2/model_provider.cc) | 从尺寸表登记标准名称及 `d*` 别名；选择 LLMC 加载或指定尺寸的随机初始化。 |
 | LLaMA3 | [model_provider.cc](../example/llama3/model_provider.cc) | 使用 LLaMA3 配置校验和 LLMC loader。 |
 | Qwen3 | [model_provider.cc](../example/qwen3/model_provider.cc) | 使用 Qwen3 配置校验和 LLMC loader。 |
+| Mixtral | [model_provider.cc](../example/mixtral/model_provider.cc) | 从 LLMC 文件头读取实际 MoE 结构，或使用 `TinyMixtralConfig()` 随机初始化；校验 TP、ETP、SP 与专家切分约束。 |
 
 每个 provider 文件通过文件内的静态初始化 lambda 调用 `Register()`。登记发生在进入 `main()` 前，登记内容是名称和函数；模型构建属于后续的 rank 初始化流程。训练阶段使用已经解析、绑定的回调，注册表的修改阶段位于程序启动期。
 
 注册表要求名称唯一、factory 为可调用对象。名称冲突和非法注册在登记时报告；`--help` 和未知模型错误中的可用名称列表都由同一张注册表生成。
 
-CMake 将 provider 源文件直接编入 executable，使注册代码参与程序初始化。采用静态库封装 provider 时，链接规则需要显式保留这些注册对象。
+模型目录通过 `infini_train_add_gpt_model()` 声明 provider 和 loader 源码。构建层将这些源码加入共享的 `infini_train_gpt_sources` 接口目标，由各 executable 直接编译，使注册代码参与程序初始化。
 
 ### 3.1 实际模型配置
 
@@ -145,12 +150,12 @@ GPT-2 的尺寸表位于 `example/gpt2/config.h`，包含 `gpt2/gpt2-medium/gpt2
 入口解析参数、取得 model provider，并组装 dataset、forward/loss、采样回调。随后由 `Pretrain()` 组织以下过程：
 
 1. **建立运行环境。** 校验公共选项，初始化全局并行环境和精度检查环境，在当前进程按线程配置运行本地 rank。
-2. **建立 rank 上下文。** 设置线程局部 rank、设备和 DP/TP/PP 通信组，计算梯度累积次数。
+2. **建立 rank 上下文。** 设置线程局部 rank、设备 guard 和 DP/TP/PP 通信组，计算梯度累积次数。
 3. **构建模型。** 调用 provider，读取实际 `Config()`，执行设备迁移、精度检查名称映射和 LoRA 注入。
 4. **包装并行执行。** 根据拓扑构建 `PipelineParallel` 和 DDP；组合使用时，先建立流水线，再为本地 chunk 添加 DDP 包装。
 5. **建立数据与优化组件。** 调用 dataset provider，创建加载器，通过 `SetupOptimizer()` 和 `SetupLRScheduler()` 创建优化器及调度器。
 6. **恢复训练状态。** 通过 `ResumeFromCheckpoint()` 恢复状态，并根据消费样本数推进数据迭代器。
-7. **执行训练步。** 运行 forward/loss、梯度累积、backward 和优化器更新，随后更新学习率调度器。
+7. **执行训练步。** 运行 forward/loss、梯度累积、backward，通过 `FinalizeModelGrads()` 完成梯度同步，再执行优化器更新，随后更新学习率调度器。
 8. **处理步后工作。** 汇总 loss、记录性能与内存指标，调用 `AfterStep`，按配置保存 checkpoint。
 
 模型构建和并行包装有明确的先后关系：provider 使用 rank 上下文确定模型分片，设备迁移和 LoRA 注入准备待训练的参数集合，DDP/PP 包装建立执行与同步关系。`SetupOptimizer()` 最后从包装后的模型中选取普通参数或 LoRA 参数，并与 `NamedParameters()` 对齐。
@@ -162,6 +167,8 @@ GPT-2 的尺寸表位于 `example/gpt2/config.h`，包含 `gpt2/gpt2-medium/gpt2
 ```text
 M = total_batch_size / (B * S * D)
 ```
+
+CLI 同时接受序列单位的 `micro_batch_size`、`global_batch_size`：非零 `micro_batch_size` 覆盖 `batch_size`，非零 `global_batch_size` 乘以最终的 `sequence_length` 后覆盖 `total_batch_size`。参数文件使用统一的 `batch_size` / `total_batch_size`，原有 Mixtral 命令可以继续传入序列单位的参数。同一调用中建议选择一套 batch 参数；两套同时出现时，非零序列参数优先。
 
 配置要求 `M` 为正整数。普通执行每次读取一个 microbatch，累计 `M` 次；PP 执行每次读取 `B * M` 条序列，再由调度器拆分为 microbatch。
 
@@ -177,9 +184,9 @@ GPT provider 使用 `TinyShakespeareDataset` 读取有限的 token 文件，训�
 
 前向计算和损失计算在 `AutocastGuard` 管理的精度环境中执行，backward 按训练流程设定的上下文运行。精度选择来自 `TrainingOptions::dtype`。
 
-`llmc_filepath` 提供权重初始化来源，`load` 提供训练状态恢复来源。恢复前，model provider 先建立匹配的模型结构。Checkpoint 保存模型参数、按选项启用的 optimizer 状态、scheduler 状态、已完成步数和消费样本数，并记录模型尺寸与 DP/TP/SP/PP 元数据。
+`llmc_filepath` 提供权重初始化来源，`load` 提供训练状态恢复来源。恢复前，model provider 先建立匹配的模型结构。Checkpoint 保存模型参数、按选项启用的 optimizer 状态、scheduler 状态、已完成步数和消费样本数，并记录模型尺寸、原始与补齐后的词表大小，以及 DP/TP/SP/PP/VPP 元数据。保存目录由 checkpoint manager 组织为 `iter_0000001/` 等迭代目录。
 
-恢复训练时使用相同的模型结构、并行切分和调度配置。`num_iteration` 是包含已完成步数的目标总步数；`lr_decay_iters` 等参数定义整段训练的调度时间轴。
+恢复训练时 provider 建立匹配的逻辑模型结构，checkpoint 层通过各模块的 `BuildShardedStateDict()` 描述本地张量到逻辑参数的映射；PP 包装器提供本地 chunk 到全局层名的映射。优化器状态恢复遵循 checkpoint 模块对拓扑与优化器类型的约束。`num_iteration` 是包含已完成步数的目标总步数；`lr_decay_iters` 等参数定义整段训练的调度时间轴。
 
 ## 5. 普通执行与 PP 的共同计算协议
 
@@ -195,7 +202,7 @@ GPT provider 使用 `TinyShakespeareDataset` 读取有限的 token 文件，训�
     → backward
 ```
 
-完成 `M` 个 microbatch 后执行一次 optimizer step。DDP 的 `no_sync` 控制与梯度累积次数配合，最后一个 microbatch 触发相应同步。
+完成 `M` 个 microbatch 后，普通循环调用 `FinalizeModelGrads({model})`，PP 调度器对本地 chunks 调用同一接口，再执行 optimizer step。该接口统一收尾 DDP 梯度通信及 SP / QK norm 的 TP 梯度归并。Dense 模型的 DDP `no_sync` 与 microbatch 累积配合；MoE 按下述配置在最终同步阶段处理稀疏路由参数。
 
 ### 5.1 流水线中的前向与损失
 
@@ -215,6 +222,20 @@ PP 接收 shape 由实际模型配置生成，采用 `[batch_size, sequence_leng
 
 PP 使用现有的调度表生成、通信、microbatch 拆分和 `no_sync` 机制。`PipelineSchedule::Step()` 负责 zero-grad 和 optimizer step，外层训练循环负责 scheduler step。采用损失模块接口的调用方可以使用默认构造参数，经由 `ForwardOneChunk()` 和 `loss_fn` 执行。
 
+### 5.3 MoE 与专家并行
+
+`TrainingOptions` 的 `expert_parallel`、`expert_tensor_parallel` 传给全局拓扑初始化。Dense rank generator 描述 TP/DP/PP，expert rank generator 描述 ETP/EP/EDP/PP。数据分发与全局 batch 计算使用 dense DP；专家参数的同步范围由 DDP 根据 expert EDP 拓扑和参数标记确定。
+
+训练层从 `TransformerConfig::ffn_type` 判断 MoE，并为整模型或每个 PP chunk 设置 `handle_unused_parameters=true`、`overlap_grad_reduce=false`。这样，路由未命中的专家按零梯度处理，各 rank 在固定顺序完成梯度同步。MoE 使用 ZeRO 0/1/2。
+
+Mixtral provider 封装当前模型能力边界：TP=1、ETP=1、SP 关闭，专家数可被 EP 大小整除。随机初始化支持 PP/VPP，当前 LLMC loader 使用 PP=1。EP=1 可使用公共 checkpoint 路径；EP>1 的训练 checkpoint 需要专家逻辑编号与分片元数据，入口在请求保存或恢复时明确校验这一条件。
+
+### 5.4 Activation recompute
+
+公共 CLI 将 `activation_recompute`、`recompute_granularity`、`recompute_method`、`recompute_num_layers` 转成 `ActivationRecomputeOptions`，注册表按值绑定到 model provider。Provider 在模型构造前把这些选项应用到实际配置；LLMC 加载与随机初始化共用这一时机。Transformer 执行层据此安排 full-layer recompute，支持 `none`、`uniform`、`block` 方法。
+
+`log_interval` 控制公共训练日志频率，零表示关闭步骤日志；`print_timing` 在迭代边界同步设备并汇总平均耗时。
+
 ## 6. 配置模型与命令行
 
 配置由三层组成：框架默认值、模型运行预设、调用时覆盖。
@@ -225,13 +246,14 @@ PP 使用现有的调度表生成、通信、microbatch 拆分和 `no_sync` 机�
 
 每个模型目录的 `train.flags` 表达该模型的运行预设：
 
-| 配置 | [GPT-2](../example/gpt2/train.flags) | [LLaMA3](../example/llama3/train.flags) / [Qwen3](../example/qwen3/train.flags) |
-| --- | --- | --- |
-| optimizer | `sgd` | `adam` |
-| learning_rate | `0.0001` | `0.00001` |
-| lora_target_modules | `c_attn,c_proj` | `c_attn,c_proj,c_fc,c_fc2` |
-| load_optimizer_state / save_optimizer_state | `false` | `true` |
-| profile_name | `gpt2` | 对应模型名 |
+| 配置 | [GPT-2](../example/gpt2/train.flags) | [LLaMA3](../example/llama3/train.flags) / [Qwen3](../example/qwen3/train.flags) | [Mixtral](../example/mixtral/train.flags) |
+| --- | --- | --- | --- |
+| optimizer | `sgd` | `adam` | `adam` |
+| learning_rate | `0.0001` | `0.00001` | `0.0001` |
+| device | `cuda` | `cuda` | `cpu` |
+| lora_target_modules | `c_attn,c_proj` | `c_attn,c_proj,c_fc,c_fc2` | 框架默认值 |
+| load_optimizer_state / save_optimizer_state | `false` | `true` | 框架默认值 `true` |
+| profile_name | `gpt2` | 对应模型名 | `mixtral` |
 
 预设还包含 batch、序列长度、精度和训练步数等参数。`--model` 的职责是选择注册的模型构建函数；优化器等训练设置由上述配置层共同确定。
 
@@ -281,9 +303,9 @@ gflags 执行 validator 时持有注册表锁，因此解析流程先采集参�
 | `InfiniTrain::infini_train` | 公共训练接口及执行实现、模型注册表 | C++ 调用者构造 `TrainingOptions` 与回调，调用 `Pretrain()`。 |
 | `InfiniTrain::training_cli` | 参数定义、文件校验、路径定位和配置转换 | 采用标准训练命令行的应用按需链接。 |
 
-CLI 作为单独静态库，使训练参数的注册范围与应用的链接选择保持一致。框架 executable 链接接口使用 whole-archive 保留运行时注册对象；GPT 的 provider 源文件直接列入 executable 源码列表，参与启动期注册。
+CLI 作为单独静态库，使训练参数的注册范围与应用的链接选择保持一致。框架 executable 链接接口使用 whole-archive 保留运行时注册对象；GPT 的 provider 通过接口目标的源码传递机制编入每个 executable，参与启动期注册。
 
-四个 executable 共用 `INFINITRAIN_GPT_EXAMPLE_SOURCES`：
+统一入口与各模型 executable 共用 `infini_train_gpt_sources`。当前模型目录生成以下产物：
 
 | executable | 配置选择 |
 | --- | --- |
@@ -291,8 +313,21 @@ CLI 作为单独静态库，使训练参数的注册范围与应用的链接选�
 | `gpt2` | 先加载 `configs/gpt2/train.flags`，再解析 CLI。 |
 | `llama3` | 先加载 `configs/llama3/train.flags`，再解析 CLI。 |
 | `qwen3` | 先加载 `configs/qwen3/train.flags`，再解析 CLI。 |
+| `mixtral` | 先加载 `configs/mixtral/train.flags`，再解析 CLI。 |
 
-CMake 通过 `INFINITRAIN_GPT_DEFAULT_FLAGFILE` 为三个兼容 executable 指定相对配置路径，并在构建时同步模型目录中的文件：
+构建组织分为三个层次：
+
+| 层次 | 入口 | 职责 |
+| --- | --- | --- |
+| 项目 | [CMakeLists.txt](../CMakeLists.txt) | 定义框架及公共链接组件，通过 `add_subdirectory(example)` 加载示例。 |
+| 示例聚合 | [example/CMakeLists.txt](../example/CMakeLists.txt) | 定义 GPT 公共任务源码和统一入口，发现 `example/*/CMakeLists.txt`。 |
+| 模型目录 | `example/<model>/CMakeLists.txt` | 声明该模型的 provider、loader、参数文件及 executable 名称。 |
+
+目录发现使用 `file(GLOB ... CONFIGURE_DEPENDS)`，下一次构建会检测模型清单文件的新增或移除。每个目录通过自己的 `CMakeLists.txt` 显式列出源码。GPT 模型调用 [gpt_examples.cmake](../cmake/gpt_examples.cmake) 中的 `infini_train_add_gpt_model()`；MNIST 的目录使用常规 executable 定义。
+
+`infini_train_gpt_sources` 是一个接口目标，携带公共任务源码和各模型登记的源码。每个 executable 编译这组接口源码，并使用自己的编译定义，因此后端适配与默认配置设置作用于对应程序。公共 helper 为目标链接训练 CLI，并通过 `link_infini_train_exe()` 组织框架静态库的 whole-archive 链接组。
+
+构建 helper 通过 `INFINITRAIN_GPT_DEFAULT_FLAGFILE` 为模型 executable 指定相对配置路径，并同步声明的参数文件。默认输出位置保持在构建根目录；配置同步使用实际目标文件目录，适配多配置生成器和自定义输出位置：
 
 ```text
 build/
@@ -300,10 +335,12 @@ build/
   gpt2
   llama3
   qwen3
+  mixtral
   configs/
     gpt2/train.flags
     llama3/train.flags
     qwen3/train.flags
+    mixtral/train.flags
 ```
 
 默认文件相对实际 executable 定位。部署时将程序与相邻的 `configs/` 一起分发，运行目录可以独立选择；Linux 通过 `/proc/self/exe` 定位，支持从 `PATH` 启动。
@@ -322,11 +359,26 @@ build/
 
 1. 在 `config.h` 中定义架构、尺寸及其校验规则。
 2. 在 `checkpoint_loader.cc` 中实现权重格式映射，并填充实际模型配置。
-3. 在 `model_provider.cc` 中登记名称和 factory；factory 根据权重路径选择加载或随机初始化。
+3. 在 `model_provider.cc` 中登记名称和 factory；factory 根据权重路径选择加载或随机初始化，并在构造模型前应用绑定的 recompute 配置。
 4. 在 `train.flags` 中提供模型选择和训练预设。
-5. 将 provider、loader 源文件加入 GPT executable 的 CMake 源码列表。
+5. 在模型目录添加 `CMakeLists.txt`，声明源码和参数文件：
 
-注册表随后为入口提供名称解析、帮助列表和诊断信息。GPT-2 的尺寸别名通过该模型自己的尺寸表统一登记。
+```cmake
+infini_train_add_gpt_model(my_model
+  SOURCES model_provider.cc checkpoint_loader.cc
+  FLAGFILE train.flags
+)
+```
+
+例如，新目录 `example/my_model/` 包含这些文件后，执行：
+
+```bash
+cmake --build build --target pretrain_gpt my_model
+```
+
+构建系统自动加载该目录的声明，将 provider 编入统一入口，并生成 `my_model` executable 和随包配置 `configs/my_model/train.flags`。已有模型的构建规则同样位于各自目录。
+
+CMake 声明决定编译哪些实现，C++ provider 注册决定 `--model` 接受哪些名称。注册表为入口提供名称解析、帮助列表和诊断信息；GPT-2 的尺寸别名通过该模型自己的尺寸表统一登记。
 
 ### 8.2 扩展数据与任务计算
 
@@ -344,7 +396,7 @@ build/
 | 新增优化器或调度策略 | `SetupOptimizer()`、`SetupLRScheduler()` 及对应实现模块。 |
 | 新增训练状态 | checkpoint 的保存、恢复和数据消费位置处理。 |
 | 调整流水线执行 | `nn/parallel/pp` 中的调度和通信实现，并验证训练回调与损失模块两条调用路径。 |
-| 构建外部 GPT executable | 使用 GPT 任务源码、provider/loader、框架 executable 链接接口和 CLI 组件，并分发相应参数文件。 |
+| 构建外部 GPT executable | 通过模型目录声明 provider/loader，链接 GPT 源码接口目标及所需后端组件，并分发相应参数文件。 |
 
 ## 9. 与 Megatron 的语义对应
 
@@ -368,7 +420,7 @@ InfiniTrain 的 DataLoader 已负责组成 batch，PP 调度器负责拆分 micr
 | 测试 | 关注点 |
 | --- | --- |
 | [test_model_provider_registry.cc](../tests/pretrain/test_model_provider_registry.cc) | 延迟构建、回调与绑定参数的生命周期、名称冲突及诊断信息。 |
-| [test_training_arguments.cc](../tests/pretrain/test_training_arguments.cc) | 默认值一致性、参数覆盖顺序、文件语法、嵌套包含、路径处理和显式配置接入。 |
+| [test_training_arguments.cc](../tests/pretrain/test_training_arguments.cc) | 默认值一致性、参数覆盖顺序、序列 batch 换算及溢出、并行与重计算选项、文件语法、嵌套包含和路径处理。 |
 
 ```bash
 cmake --build build --target test_model_provider_registry test_training_arguments
@@ -377,6 +429,25 @@ ctest --test-dir build -R 'ModelProviderRegistryTest|TrainingArgumentsTest' --ou
 
 训练行为验证使用固定模型权重和 token 数据，分别检查普通执行、并行执行和中断恢复。关键观察量包括 loss、参数更新、optimizer/scheduler 状态及消费样本数。中断恢复应在相同模型结构、拓扑和调度时间轴下，与连续训练进行对照。
 
-已有本地记录覆盖 CPU-only/CUDA 构建、三模型数值对照、LoRA、断点恢复、两卡并行以及 LLaMA3 四卡组合。头文件检查验证了 `training.h` 的独立包含，运行检查还覆盖普通 CPU 训练和两卡 PP/VPP 冒烟检查。训练记录主要使用固定的小层数、小 hidden size 模型；GoogleTest 的持续覆盖范围如上表所列。
+重构早期的本地记录覆盖 CPU-only/CUDA 构建、三模型数值对照、LoRA、断点恢复、两卡并行以及 LLaMA3 四卡组合。头文件检查验证了 `training.h` 的独立包含，运行检查还覆盖普通 CPU 训练和两卡 PP/VPP 冒烟检查。训练记录主要使用固定的小层数、小 hidden size 模型；GoogleTest 的持续覆盖范围如上表所列。
 
 配置部署验证采用复制和移动 executable/configs 目录、切换工作目录、通过 `PATH` 启动等方式，并检查最终生效的配置。默认值和文件校验单测提供参数语义验证，实际 executable 检查提供构建产物与启动流程验证。
+
+### 10.1 基于 master `5a7be78` 的接入验证
+
+本轮验证使用四层固定 LLMC 权重和固定 token 数据，每组训练两步，对照输出 loss；Mixtral 的随机初始化 PP 用例使用默认模型配置训练一步。
+
+| 验证范围 | 结果 |
+| --- | --- |
+| 四模型的 CPU / CUDA、命名 executable / `pretrain_gpt` | loss 对照通过；命名 executable 自动读取随包参数文件。 |
+| 四模型的 full / uniform recompute 与普通训练、保存一轮后恢复第二轮 | loss 对照通过。 |
+| GPT-2、LLaMA3、Qwen3 的两卡 DP、TP、SP、PP、VPP | 与同一模型单卡训练的 loss 对照通过。 |
+| Mixtral 两卡 DP、EP，四卡 EP+EDP | 与单卡训练的 loss 对照通过。 |
+| Mixtral EP+ZeRO 0/1/2 | 与 master 原始 Mixtral 训练逻辑在同配置下的 loss 一致。对照程序使用文件头建立同一小型模型，训练循环沿用 master。 |
+| Mixtral 随机初始化 PP、VPP、EP+PP | 均完成训练，loss 有限。 |
+| C++ / CTest | 选中的 60 项中，50 项通过、10 项按现有测试条件跳过，零失败；覆盖训练参数、注册表、checkpoint、Transformer 和并行拓扑。 |
+| 代码规范 | 全量 clang-format 16、Black、clang-tidy 18、IWYU 检查通过。 |
+
+Mixtral 的 ZeRO 1/2 相对 ZeRO 0 仍存在 master 同样具有的小幅数值偏差：本轮第二步 loss 分别为 `4.120690`、`4.120387`，ZeRO 0 为 `4.120744`。统一入口与 master 在各自相同 ZeRO 配置下的结果一致；该对照验证的是入口迁移的数值保持。
+
+本地构建与检查日志位于 `build/rebase-*.log`，训练与对照记录位于 `build/rebase-validation/`。这些是本地验证产物；持续回归测试由上述 C++ 测试维护。

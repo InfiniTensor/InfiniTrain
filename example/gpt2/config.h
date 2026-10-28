@@ -10,13 +10,15 @@
 namespace nn = infini_train::nn;
 namespace gpt2 {
 struct GPT2Size {
-    int64_t layers;
-    int64_t heads;
-    int64_t hidden;
+  int64_t layers;
+  int64_t heads;
+  int64_t hidden;
 };
 inline const std::unordered_map<std::string, GPT2Size> kModelSizes = {
-    {"gpt2", {12, 12, 768}},        {"d12", {12, 12, 768}},  {"gpt2-medium", {24, 16, 1024}}, {"d24", {24, 16, 1024}},
-    {"gpt2-large", {36, 20, 1280}}, {"d36", {36, 20, 1280}}, {"gpt2-xl", {48, 25, 1600}},     {"d48", {48, 25, 1600}},
+    {"gpt2", {12, 12, 768}},         {"d12", {12, 12, 768}},
+    {"gpt2-medium", {24, 16, 1024}}, {"d24", {24, 16, 1024}},
+    {"gpt2-large", {36, 20, 1280}},  {"d36", {36, 20, 1280}},
+    {"gpt2-xl", {48, 25, 1600}},     {"d48", {48, 25, 1600}},
 };
 
 inline nn::TransformerConfig GPT2Config() {
@@ -37,17 +39,18 @@ inline nn::TransformerConfig GPT2Config() {
       .rotary_interleaved = true};
 }
 
-inline nn::TransformerConfig GPT2Config(const std::string &name, int tensor_parallel_size) {
-    CHECK_GT(tensor_parallel_size, 0);
-    const auto &size = kModelSizes.at(name);
-    auto config = GPT2Config();
-    config.n_layer = size.layers;
-    config.n_head = config.n_kv_head = size.heads;
-    config.n_embd = size.hidden;
-    // Scratch models pad vocabulary only as required by TP.
-    config.vocab_size
-        = (config.original_vocab_size + tensor_parallel_size - 1) / tensor_parallel_size * tensor_parallel_size;
-    return config;
+inline nn::TransformerConfig GPT2Config(const std::string &name,
+                                        int tensor_parallel_size) {
+  CHECK_GT(tensor_parallel_size, 0);
+  const auto &size = kModelSizes.at(name);
+  auto config = GPT2Config();
+  config.n_layer = size.layers;
+  config.n_head = config.n_kv_head = size.heads;
+  config.n_embd = size.hidden;
+  // Scratch models pad vocabulary only as required by TP.
+  config.vocab_size = (config.original_vocab_size + tensor_parallel_size - 1) /
+                      tensor_parallel_size * tensor_parallel_size;
+  return config;
 }
 
 inline void SanitizeGPT2Config(const nn::TransformerConfig &c) {

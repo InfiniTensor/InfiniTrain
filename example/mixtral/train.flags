@@ -1,0 +1,12 @@
+# Mixtral training defaults. Global batch size is expressed in tokens.
+--model=mixtral
+--device=cpu
+--optimizer=adam
+--learning_rate=0.0001
+--batch_size=4
+--sequence_length=64
+--total_batch_size=256
+--num_iteration=10
+--dtype=float32
+--zero_stage=0
+--profile_name=mixtral

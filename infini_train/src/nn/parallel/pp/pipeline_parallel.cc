@@ -30,9 +30,10 @@ void PipelineParallel::BuildPipelineStage(
       rank_, num_stages_, recv_shape, device, std::move(chunks));
 }
 
-void PipelineParallel::SetupSchedule(int num_micro_batches, training::ForwardStepFunction forward_step) {
-  schedule_ = std::make_shared<PipelineSchedule>(pipeline_stage_, num_stages_,
-                                                 num_micro_batches, std::move(forward_step));
+void PipelineParallel::SetupSchedule(
+    int num_micro_batches, training::ForwardStepFunction forward_step) {
+  schedule_ = std::make_shared<PipelineSchedule>(
+      pipeline_stage_, num_stages_, num_micro_batches, std::move(forward_step));
 }
 
 float PipelineParallel::TrainStep(

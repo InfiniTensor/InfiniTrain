@@ -4,6 +4,7 @@
 #include <algorithm>
 #include <cstddef>
 #include <format>
+#include <functional>
 #include <memory>
 #include <ostream>
 #include <string>
@@ -276,15 +277,18 @@ float PipelineSchedule::StepMicroBatches(
       }
 
       if (forward_step_) {
-        auto result = forward_step_(*stage_->chunks().at(task.local_chunk_idx), inputs,
-                                     task.is_last_chunk ? microbatch_targets[mb] : nullptr);
+        auto result = forward_step_(
+            *stage_->chunks().at(task.local_chunk_idx), inputs,
+            task.is_last_chunk ? microbatch_targets[mb] : nullptr);
         activations[task.local_chunk_idx][mb] = std::move(result.output);
         if (task.is_last_chunk) {
-          CHECK(result.loss_func) << "forward_step must return a loss callback on the last chunk";
+          CHECK(result.loss_func)
+              << "forward_step must return a loss callback on the last chunk";
           loss_functions[mb] = std::move(result.loss_func);
         }
       } else {
-        activations[task.local_chunk_idx][mb] = stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
+        activations[task.local_chunk_idx][mb] =
+            stage_->ForwardOneChunk(inputs, task.local_chunk_idx);
       }
 
       if (!task.is_last_chunk) {
@@ -312,10 +316,10 @@ float PipelineSchedule::StepMicroBatches(
             loss = loss_functions[mb](activations[task.local_chunk_idx][mb]);
             loss_functions[mb] = {};
           } else {
-          auto target_on_device =
-              target->To(activations[task.local_chunk_idx][mb][0]->GetDevice());
-          loss = (*loss_fn)({activations[task.local_chunk_idx][mb][0],
-                             std::make_shared<Tensor>(target_on_device)})[0];
+            auto target_on_device = target->To(
+                activations[task.local_chunk_idx][mb][0]->GetDevice());
+            loss = (*loss_fn)({activations[task.local_chunk_idx][mb][0],
+                               std::make_shared<Tensor>(target_on_device)})[0];
           }
           loss = loss / n;
         }

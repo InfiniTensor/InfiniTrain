@@ -25,8 +25,11 @@ class PipelineStage;
 class PipelineSchedule {
  public:
   PipelineSchedule(std::shared_ptr<PipelineStage> stage, int num_stages,
-                   int num_micro_batches, training::ForwardStepFunction forward_step = {})
-      : stage_(std::move(stage)), num_micro_batches_(num_micro_batches), forward_step_(std::move(forward_step)) {}
+                   int num_micro_batches,
+                   training::ForwardStepFunction forward_step = {})
+      : stage_(std::move(stage)),
+        num_micro_batches_(num_micro_batches),
+        forward_step_(std::move(forward_step)) {}
 
   virtual ~PipelineSchedule() = default;
 

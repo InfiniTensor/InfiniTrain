@@ -244,58 +244,7 @@ target_link_libraries(infini_train_training_cli PUBLIC InfiniTrain::infini_train
 # ------------------------------------------------------------------------------
 
 if(PROJECT_IS_TOP_LEVEL)
-add_executable(mnist
-  example/mnist/main.cc
-  example/mnist/dataset.cc
-  example/mnist/net.cc
-)
-link_infini_train_exe(mnist)
-
-# Only GPT task/data/weight-format code belongs to the example executable.
-# The training runtime comes from infini_train; its CLI adapter is opt-in.
-set(INFINITRAIN_GPT_EXAMPLE_SOURCES
-  example/pretrain_gpt.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/common/tokenizer.cc
-  # Provider TUs contain startup registration and must be linked into the
-  # executable directly (not discarded as unreferenced archive members).
-  example/gpt2/model_provider.cc
-  example/llama3/model_provider.cc
-  example/qwen3/model_provider.cc
-  example/gpt2/checkpoint_loader.cc
-  example/llama3/checkpoint_loader.cc
-  example/qwen3/checkpoint_loader.cc
-)
-
-foreach(model IN ITEMS pretrain_gpt gpt2 llama3 qwen3)
-  add_executable(${model} ${INFINITRAIN_GPT_EXAMPLE_SOURCES})
-  if(NOT model STREQUAL "pretrain_gpt")
-    target_compile_definitions(${model} PRIVATE
-      INFINITRAIN_GPT_DEFAULT_FLAGFILE="configs/${model}/train.flags")
-    # Keep runtime presets beside each executable, including multi-config builds.
-    # Copy on every requested build so editing a preset needs no C++ recompilation.
-    add_custom_target(${model}_training_config
-      COMMAND ${CMAKE_COMMAND} -E make_directory "$<TARGET_FILE_DIR:${model}>/configs/${model}"
-      COMMAND ${CMAKE_COMMAND} -E copy_if_different
-        "${CMAKE_CURRENT_SOURCE_DIR}/example/${model}/train.flags"
-        "$<TARGET_FILE_DIR:${model}>/configs/${model}/train.flags"
-      VERBATIM
-    )
-    add_dependencies(${model} ${model}_training_config)
-  endif()
-  target_link_libraries(${model} PRIVATE InfiniTrain::training_cli)
-  link_infini_train_exe(${model})
-endforeach()
-
-add_executable(mixtral
-  example/mixtral/main.cc
-  example/common/tiny_shakespeare_dataset.cc
-  example/common/utils.cc
-  example/mixtral/checkpoint_loader.cc
-)
-link_infini_train_exe(mixtral)
-
+  add_subdirectory(example)
 endif()
 
 # Tools
