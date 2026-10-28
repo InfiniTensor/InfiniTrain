@@ -109,6 +109,7 @@ DEFINE_string(device, "cuda",
               "device type (cpu/cuda/privateuse1/<registered privateuse1 "
               "backend name>), useless if using parallel "
               "training mode");
+DEFINE_string(attention_backend, "unfused", "attention backend: unfused|flash");
 // parallel
 DEFINE_int32(nthread_per_process, 1,
              "Number of threads to use for each process. "
@@ -165,6 +166,8 @@ constexpr char kDtypeFP32[] = "float32";
 constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles = {
     "none", "constant", "linear", "cosine", "inverse-square-root"};
+constexpr char kAttentionBackendUnfused[] = "unfused";
+constexpr char kAttentionBackendFlash[] = "flash";
 
 //
 const std::unordered_map<std::string, nn::TransformerConfig> kModelToConfigs = {
@@ -201,6 +204,9 @@ DEFINE_validator(model, [](const char *, const std::string &value) {
 });
 DEFINE_validator(device, [](const char *, const std::string &value) {
   return Device::ParseType(value).has_value();
+});
+DEFINE_validator(attention_backend, [](const char *, const std::string &value) {
+  return value == kAttentionBackendUnfused || value == kAttentionBackendFlash;
 });
 DEFINE_validator(zero_stage, [](const char *, int32_t value) {
   return value >= 0 && value <= 3;
@@ -289,6 +295,12 @@ void Train(const nn::parallel::Rank &rank) {
     device = Device(device_type, 0);
   }
 
+  const bool use_flash_attention =
+      FLAGS_attention_backend == kAttentionBackendFlash;
+  if (use_flash_attention && device.type() != Device::DeviceType::kCUDA) {
+    LOG(FATAL) << "--attention_backend=flash requires --device=cuda";
+  }
+
   // calculate gradient accumulation from the desired total batch size and the
   // current run configuration
   const auto tokens_per_fwdbwd =
@@ -311,9 +323,17 @@ void Train(const nn::parallel::Rank &rank) {
       FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
 
   if (!FLAGS_llmc_filepath.empty()) {
-    model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
+    model = gpt2::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options,
+                               use_flash_attention);
   } else if (kModelToConfigs.count(FLAGS_model)) {
     model_config = kModelToConfigs.at(FLAGS_model);
+    model_config.n_kv_head = model_config.n_head;
+    model_config.flash = use_flash_attention;
+    gpt2::SanitizeGPT2Config(model_config);
+    nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
+    model = std::make_shared<nn::TransformerModel>(model_config);
+  } else {
+    model_config.flash = use_flash_attention;
     gpt2::SanitizeGPT2Config(model_config);
     nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
     model = std::make_shared<nn::TransformerModel>(model_config);
@@ -356,6 +376,11 @@ void Train(const nn::parallel::Rank &rank) {
   } else {
     LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype
                << " not supported.";
+  }
+  if (use_flash_attention && dtype != DataType::kBFLOAT16) {
+    LOG(FATAL) << "--attention_backend=flash currently requires "
+                  "--dtype=bfloat16 because FlashAttention 2 "
+                  "supports fp16/bf16 kernels only";
   }
 
   auto num_micro_batches =
@@ -684,6 +709,7 @@ void Train(const nn::parallel::Rank &rank) {
         if (tokenizer) {
           // FIXME(jym): to support PP
           CHECK_EQ(pp_world_size, 1);
+          infini_train::AutocastGuard autocast_guard(device.type(), dtype);
           tokenizer->GenerateText(*model, FLAGS_batch_size,
                                   FLAGS_sequence_length, FLAGS_text_length,
                                   device);
