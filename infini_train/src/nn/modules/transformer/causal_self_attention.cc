@@ -194,11 +194,11 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   const bool use_context_parallel =
       parallel::global::GetContextParallelSize() > 1;
   if (use_context_parallel && !mask) {
-    const auto q_start = parallel::GetContextParallelSequenceStart(T);
     const auto T_kv = T * parallel::global::GetContextParallelSize();
-    mask =
-        buffers_[kParamBiasName]->Slice(
-            {0, 0, q_start, 0}, {1, 1, q_start + T, T_kv}, {1, 1, 1, 1}) == 0;
+    mask = parallel::SliceAlongCPRegionFunc(
+               buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T_kv, T_kv},
+                                               {1, 1, 1, 1}),
+               2) == 0;
   }
   // NOTE(zbl): torch script uses torch.split({...}, dim) to split tensors into
   // sub-tensors in different sizes

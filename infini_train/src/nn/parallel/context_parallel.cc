@@ -37,6 +37,65 @@ thread_local int cp_rank = 0;
 
 namespace {
 
+// Select a rank's sequence region, retaining the global order within each half.
+std::shared_ptr<Tensor> SliceCPRank(const std::shared_ptr<Tensor> &input,
+                                    int64_t dim, int rank, int cp_size) {
+  if (dim < 0) {
+    dim += static_cast<int64_t>(input->Dims().size());
+  }
+  CHECK_GE(dim, 0);
+  CHECK_LT(dim, static_cast<int64_t>(input->Dims().size()));
+  CHECK_GT(cp_size, 0);
+  CHECK_GE(rank, 0);
+  CHECK_LT(rank, cp_size);
+  const bool zigzag = global::GetAttentionCPLayout() == "zigzag" && cp_size > 1;
+  const int chunks = cp_size * (zigzag ? 2 : 1);
+  CHECK_EQ(input->Dims()[dim] % chunks, 0)
+      << "Sequence dimension must be divisible by CP size (2 * CP for zigzag)";
+  const int64_t chunk_size = input->Dims()[dim] / chunks;
+  auto first = input->Slice(dim, rank * chunk_size, (rank + 1) * chunk_size);
+  if (!zigzag) {
+    return first;
+  }
+  const int last = chunks - rank - 1;
+  return nn::function::Concat(
+      {first, input->Slice(dim, last * chunk_size, (last + 1) * chunk_size)},
+      dim);
+}
+
+// Rank-major pairs [0, 2C-1, 1, 2C-2, ...] <-> sequence order [0, 1, ...].
+// For a hierarchical A2A subgroup, this joins its adjacent front chunks and
+// reversed back chunks into the two halves consumed by the outer P2P ring.
+std::shared_ptr<Tensor> ReorderCPSequence(const std::shared_ptr<Tensor> &input,
+                                          int64_t dim, int cp_size,
+                                          bool to_sequence_order) {
+  if (global::GetAttentionCPLayout() != "zigzag" || cp_size == 1) {
+    return input;
+  }
+  CHECK_EQ(input->Dims()[dim] % (2 * cp_size), 0);
+  const int64_t chunk_size = input->Dims()[dim] / (2 * cp_size);
+  std::vector<std::shared_ptr<Tensor>> chunks;
+  chunks.reserve(2 * cp_size);
+  if (to_sequence_order) {
+    for (int rank = 0; rank < cp_size; ++rank) {
+      chunks.push_back(input->Slice(dim, 2 * rank * chunk_size,
+                                    (2 * rank + 1) * chunk_size));
+    }
+    for (int rank = cp_size - 1; rank >= 0; --rank) {
+      chunks.push_back(input->Slice(dim, (2 * rank + 1) * chunk_size,
+                                    (2 * rank + 2) * chunk_size));
+    }
+  } else {
+    for (int rank = 0; rank < cp_size; ++rank) {
+      chunks.push_back(
+          input->Slice(dim, rank * chunk_size, (rank + 1) * chunk_size));
+      chunks.push_back(input->Slice(dim, (2 * cp_size - rank - 1) * chunk_size,
+                                    (2 * cp_size - rank) * chunk_size));
+    }
+  }
+  return nn::function::Concat(chunks, dim);
+}
+
 const ProcessGroup *GetCPGroup(const std::shared_ptr<Tensor> &tensor) {
   auto cp_size = global::GetContextParallelSize();
   CHECK_GT(cp_size, 0);
@@ -122,10 +181,12 @@ std::shared_ptr<Tensor> AllToAllSeqToHead(const std::shared_ptr<Tensor> &input,
   // sequence-owner rank.
   auto exchanged = AllToAllAlongFirstDim(send_input, cp_group);
   // output: (B, H_per_cp, T_g, D)
-  return exchanged->View({cp_size, H_per_cp, B, T_l, D})
-      ->Transpose(0, 2)
-      ->Contiguous()
-      ->View({B, H_per_cp, static_cast<int64_t>(cp_size) * T_l, D});
+  auto output =
+      exchanged->View({cp_size, H_per_cp, B, T_l, D})
+          ->Transpose(0, 2)
+          ->Contiguous()
+          ->View({B, H_per_cp, static_cast<int64_t>(cp_size) * T_l, D});
+  return ReorderCPSequence(output, 2, cp_size, /*to_sequence_order=*/true);
 }
 
 std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input,
@@ -146,7 +207,8 @@ std::shared_ptr<Tensor> AllToAllHeadToSeq(const std::shared_ptr<Tensor> &input,
   // send_input: (CP * H_per_cp, B, T_l, D), split dim 0 into CP sequence-owner
   // chunks.
   auto send_input =
-      input->View({B, H_per_cp, cp_size, T_l, D})
+      ReorderCPSequence(input, 2, cp_size, /*to_sequence_order=*/false)
+          ->View({B, H_per_cp, cp_size, T_l, D})
           ->Transpose(0, 2)
           ->Contiguous()
           ->View({static_cast<int64_t>(cp_size) * H_per_cp, B, T_l, D});
@@ -291,9 +353,12 @@ class GatherFromCPRegion : public autograd::Function {
     // FIXME(zbl): Megatron keeps sequence as dim 0. We uses [B, H, S, D], so
     // move only
     //              the sequence dimension to dim 0 before the CP gather.
-    return {GatherAlongFirstDim(input->Transpose(0, 2), GetCPGroup(input))
-                ->Transpose(0, 2)
-                ->Contiguous()};
+    auto gathered =
+        GatherAlongFirstDim(input->Transpose(0, 2), GetCPGroup(input))
+            ->Transpose(0, 2)
+            ->Contiguous();
+    return {ReorderCPSequence(gathered, 2, global::GetContextParallelSize(),
+                              /*to_sequence_order=*/true)};
   }
 
   std::vector<std::shared_ptr<Tensor>> Backward(
@@ -301,7 +366,10 @@ class GatherFromCPRegion : public autograd::Function {
     // FIXME(zbl): Megatron keeps sequence as dim 0. We uses [B, H, S, D], so
     // move only
     //              the sequence dimension to dim 0 before the CP gather.
-    return {ReduceScatterAlongFirstDim(grad_outputs[0]->Transpose(0, 2))
+    auto rank_order =
+        ReorderCPSequence(grad_outputs[0], 2, global::GetContextParallelSize(),
+                          /*to_sequence_order=*/false);
+    return {ReduceScatterAlongFirstDim(rank_order->Transpose(0, 2))
                 ->Transpose(0, 2)
                 ->Contiguous()};
   }
@@ -389,6 +457,13 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     const bool batch_p2p_comm = (cp_size == 2);
 
     const int64_t local_t = q->Dims()[2];
+    const bool zigzag = global::GetAttentionCPLayout() == "zigzag";
+    if (zigzag) {
+      CHECK_EQ(local_t % 2, 0)
+          << "Zigzag ring attention requires two equal local halves";
+    }
+    CHECK_EQ(mask->Dims()[2], local_t);
+    CHECK_EQ(mask->Dims().back(), local_t * cp_size);
     CHECK_EQ(k_local->Dims()[2], local_t);
     CHECK_EQ(v_local->Dims()[2], local_t);
     CHECK_EQ(k_local->Dims()[1], v_local->Dims()[1]);
@@ -462,15 +537,12 @@ class AttnWithCPAndKVP2P : public autograd::Function {
 
       // Rank of owner of current K/V chunk in this step
       const int owner = (rank - step + cp_size) % cp_size;
-      // Token range of current K/V chunk
-      const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
-      const int64_t kv_end = kv_start + local_t;
-      // NOTE(zbl): CP shards the sequence dimension in rank order: higher ranks
-      // own later token chunks.
-      //            Under causal attention, queries in this rank cannot attend
-      //            to K/V from later chunks, so a chunk is fully masked when
-      //            its owner rank is greater than the query rank.
-      const bool chunk_fully_masked = owner > rank;
+      // Contiguous shards skip future owners. Zigzag shards always have a
+      // contribution: earlier owners supply only their front KV half, while
+      // later owners contribute only to the back Q half.
+      const bool chunk_fully_masked = !zigzag && owner > rank;
+      const int64_t query_start = zigzag && owner > rank ? local_t / 2 : 0;
+      const int64_t kv_length = zigzag && owner < rank ? local_t / 2 : local_t;
 
       std::shared_ptr<Tensor> chunk_max;
       std::shared_ptr<Tensor> chunk_sum;
@@ -490,28 +562,65 @@ class AttnWithCPAndKVP2P : public autograd::Function {
         // chunk_out: (B, H_q, T_l, D)
         chunk_out = NewZeroTensorLike(q);
       } else {
-        // k_for_attn: (B, H_q, T_l, D)
-        auto k_for_attn = RepeatKVHeads(current_k, n_rep);
-        // v_for_attn: (B, H_q, T_l, D)
-        auto v_for_attn = RepeatKVHeads(current_v, n_rep);
-        // scores: (B, H_q, T_l, T_l)
-        auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-        // invalid_mask: (1, 1, T_l, T_l), assume true values are invalid
+        // Active T_q/T_k can be local_t/2 for a zigzag block.
+        auto query = query_start == 0 ? q : q->Slice(2, query_start, local_t);
+        auto k_for_attn = RepeatKVHeads(kv_length == local_t
+                                            ? current_k
+                                            : current_k->Slice(2, 0, kv_length),
+                                        n_rep);
+        auto v_for_attn = RepeatKVHeads(kv_length == local_t
+                                            ? current_v
+                                            : current_v->Slice(2, 0, kv_length),
+                                        n_rep);
+        // scores: (B, H_q, T_q, T_k)
+        auto scores = query->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
+        // invalid_mask: (1, 1, T_q, T_k), assume true values are invalid
         // attention locations
-        auto invalid_mask = mask->Slice(-1, kv_start, kv_end);
+        auto invalid_mask = SliceCPRank(mask, -1, owner, cp_size);
+        if (query_start > 0) {
+          invalid_mask = invalid_mask->Slice(2, query_start, local_t);
+        }
+        if (kv_length < local_t) {
+          invalid_mask = invalid_mask->Slice(-1, 0, kv_length);
+        }
         scores = scores->MaskedFill(invalid_mask,
                                     std::numeric_limits<float>::lowest());
 
-        // chunk_max: (B, H_q, T_l, 1)
+        // Match Softmax's FP32 statistics. Casting only inside Exp would
+        // already have rounded scores - max and the online rescaling in BF16.
+        const auto compute_dtype = scores->Dtype();
+        if (compute_dtype == DataType::kBFLOAT16) {
+          scores = std::make_shared<Tensor>(scores->To(DataType::kFLOAT32));
+        }
+        // chunk_max: (B, H_q, T_q, 1)
         chunk_max = scores->Max(-1, true);
-        // probs: (B, H_q, T_l, T_l)
+        // probs: (B, H_q, T_q, T_k)
         auto probs = (scores - chunk_max)->Exp();
-        // chunk_sum: (B, H_q, T_l, 1)
+        // chunk_sum: (B, H_q, T_q, 1)
         chunk_sum = probs->Sum(-1, true);
-        // chunk_out: (B, H_q, T_l, D)
+        // FIXME: BF16 local probabilities and PV outputs are rounded before
+        // the online merge, unlike dense globally normalized probabilities.
+        // Keep one KV traversal; validate a fused CP backend for alignment.
+        // Keep PV in the forward GEMM dtype, including without autocast.
+        if (probs->Dtype() != compute_dtype) {
+          probs = std::make_shared<Tensor>(probs->To(compute_dtype));
+        }
+        // chunk_out: (B, H_q, T_q, D)
         chunk_out = probs->Matmul(v_for_attn);
       }
 
+      if (query_start > 0) {
+        // This block has no contribution to the front Q half. Keep zero
+        // statistics/output there so the existing full-row softmax merge
+        // applies.
+        auto empty_max = NewZeroTensorLike(chunk_max);
+        empty_max->Fill(std::numeric_limits<float>::lowest());
+        chunk_max = nn::function::Concat({empty_max, chunk_max}, 2);
+        chunk_sum =
+            nn::function::Concat({NewZeroTensorLike(chunk_sum), chunk_sum}, 2);
+        chunk_out =
+            nn::function::Concat({NewZeroTensorLike(chunk_out), chunk_out}, 2);
+      }
       chunk_maxs.push_back(chunk_max);
       chunk_sums.push_back(chunk_sum);
       chunk_outs.push_back(chunk_out);
@@ -583,11 +692,11 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     CHECK_EQ(saved_tensors.size(), 7);
 
     // q: (B, H_q, T_l, D)
-    const auto &q = saved_tensors[0];
+    auto q = saved_tensors[0];
     // k_local: (B, H_kv, T_l, D)
-    const auto &k_local = saved_tensors[1];
+    auto k_local = saved_tensors[1];
     // v_local: (B, H_kv, T_l, D)
-    const auto &v_local = saved_tensors[2];
+    auto v_local = saved_tensors[2];
     // mask: (1, 1, T_l, T_g), true values are invalid attention locations
     const auto &mask = saved_tensors[3];
     // output: (B, H_q, T_l, D)
@@ -597,7 +706,7 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     // softmax_sum: (B, H_q, T_l, 1)
     const auto &softmax_sum = saved_tensors[6];
     // grad_output: (B, H_q, T_l, D)
-    const auto &grad_output = grad_outputs[0];
+    auto grad_output = grad_outputs[0];
 
     // NOTE(zbl): Backward recomputes per-chunk scores/probs instead of saving
     // the full attn matrix.
@@ -606,10 +715,14 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     //            attention. Therefore, we need to restore the autocast context
     //            used in forward.
     auto forward_autocast_context = ctx_.forward_autocast_context();
-    std::unique_ptr<AutocastGuard> autocast_guard;
-    if (forward_autocast_context.enabled) {
-      autocast_guard =
-          std::make_unique<AutocastGuard>(forward_autocast_context);
+    AutocastGuard autocast_guard(forward_autocast_context);
+    // FIXME(zbl): Share compute-input preparation with Matmul autograd when a
+    // common custom-backward API is available. Direct backward dispatch does
+    // not apply autocast to saved inputs, including FP32 Q/K produced by RoPE.
+    // Recreate the operands used by the forward QK and PV GEMMs explicitly.
+    forward_autocast_context.Autocast("Matmul", q, k_local, v_local);
+    if (grad_output->Dtype() != v_local->Dtype()) {
+      grad_output = std::make_shared<Tensor>(grad_output->To(v_local->Dtype()));
     }
 
     const int cp_size = cp_group_->GetGroupSize();
@@ -625,6 +738,13 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     const bool batch_p2p_comm = (cp_size == 2);
 
     const int64_t local_t = q->Dims()[2];
+    const bool zigzag = global::GetAttentionCPLayout() == "zigzag";
+    if (zigzag) {
+      CHECK_EQ(local_t % 2, 0)
+          << "Zigzag ring attention requires two equal local halves";
+    }
+    CHECK_EQ(mask->Dims()[2], local_t);
+    CHECK_EQ(mask->Dims().back(), local_t * cp_size);
     CHECK_EQ(k_local->Dims()[2], local_t);
     CHECK_EQ(v_local->Dims()[2], local_t);
     CHECK_EQ(k_local->Dims()[1], v_local->Dims()[1]);
@@ -646,7 +766,17 @@ class AttnWithCPAndKVP2P : public autograd::Function {
     // grad_q: (B, H_q, T_l, D)
     auto grad_q = NewZeroTensorLike(q);
     // softmax_delta: (B, H_q, T_l, 1)
-    const auto softmax_delta = (grad_output * output)->Sum(-1, true);
+    // MatmulBackward rounds dO to the PV compute dtype. Use that same dO for
+    // delta, but accumulate in FP32; otherwise even a single visible key can
+    // produce nonzero dQ/dK because dP and delta no longer cancel.
+    auto delta_grad = grad_output;
+    if (delta_grad->Dtype() == DataType::kBFLOAT16) {
+      delta_grad = std::make_shared<Tensor>(delta_grad->To(DataType::kFLOAT32));
+    }
+    // FIXME: Rounded per-block PV outputs make this delta differ from
+    // sum(P * dP) using the globally normalized probabilities recomputed below.
+    // Resolve the BF16 rounding contract in a fused single-pass CP backend.
+    const auto softmax_delta = (delta_grad * output)->Sum(-1, true);
     const auto device = grad_output->GetDevice().type();
     auto *runtime_impl = core::GetDeviceGuardImpl(device);
     auto *main_compute_stream = runtime_impl->GetStream(q->GetDevice());
@@ -684,9 +814,9 @@ class AttnWithCPAndKVP2P : public autograd::Function {
       kv_compute_inputs[2 * (step % 2) + 1] = current_v;
 
       const int owner = (rank - step + cp_size) % cp_size;
-      const int64_t kv_start = static_cast<int64_t>(owner) * local_t;
-      const int64_t kv_end = kv_start + local_t;
-      const bool chunk_fully_masked = owner > rank;
+      const bool chunk_fully_masked = !zigzag && owner > rank;
+      const int64_t query_start = zigzag && owner > rank ? local_t / 2 : 0;
+      const int64_t kv_length = zigzag && owner < rank ? local_t / 2 : local_t;
 
       if (step + 1 < cp_size) {
         // NOTE(zbl): For compute-comm overlap purposes, prefetch the next K/V
@@ -711,20 +841,44 @@ class AttnWithCPAndKVP2P : public autograd::Function {
       // If chunk is fully masked, all grads are zero.
       if (!chunk_fully_masked) {
         // Recompute attention scores
-        // k_for_attn: (B, H_q, T_l, D)
-        auto k_for_attn = RepeatKVHeads(current_k, n_rep);
-        // v_for_attn: (B, H_q, T_l, D)
-        auto v_for_attn = RepeatKVHeads(current_v, n_rep);
-        // scores: (B, H_q, T_l, T_l)
-        auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
-        // invalid_mask: (1, 1, T_l, T_l), assume true values are invalid
+        // Active T_q/T_k can be local_t/2 for a zigzag block.
+        auto query = query_start == 0 ? q : q->Slice(2, query_start, local_t);
+        auto k_for_attn = RepeatKVHeads(kv_length == local_t
+                                            ? current_k
+                                            : current_k->Slice(2, 0, kv_length),
+                                        n_rep);
+        auto v_for_attn = RepeatKVHeads(kv_length == local_t
+                                            ? current_v
+                                            : current_v->Slice(2, 0, kv_length),
+                                        n_rep);
+        // scores: (B, H_q, T_q, T_k)
+        auto scores = query->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
+        // invalid_mask: (1, 1, T_q, T_k), assume true values are invalid
         // attention locations
-        auto invalid_mask = mask->Slice(-1, kv_start, kv_end);
+        auto invalid_mask = SliceCPRank(mask, -1, owner, cp_size);
+        if (query_start > 0) {
+          invalid_mask = invalid_mask->Slice(2, query_start, local_t);
+        }
+        if (kv_length < local_t) {
+          invalid_mask = invalid_mask->Slice(-1, 0, kv_length);
+        }
         scores = scores->MaskedFill(invalid_mask,
                                     std::numeric_limits<float>::lowest());
 
-        // probs: (B, H_q, T_l, T_l)
-        auto probs = (scores - softmax_max)->Exp() / softmax_sum;
+        // probs: (B, H_q, T_q, T_k)
+        auto row_max = query_start == 0
+                           ? softmax_max
+                           : softmax_max->Slice(2, query_start, local_t);
+        auto row_sum = query_start == 0
+                           ? softmax_sum
+                           : softmax_sum->Slice(2, query_start, local_t);
+        auto probs = (scores - row_max)->Exp() / row_sum;
+        auto grad_output_chunk =
+            query_start == 0 ? grad_output
+                             : grad_output->Slice(2, query_start, local_t);
+        auto row_delta = query_start == 0
+                             ? softmax_delta
+                             : softmax_delta->Slice(2, query_start, local_t);
         if (probs->Dtype() != scores->Dtype()) {
           // NOTE(zbl): Online softmax is decomposed into FP32-policy ops such
           // as Exp, while standard
@@ -737,37 +891,46 @@ class AttnWithCPAndKVP2P : public autograd::Function {
         //            as the standard autograd path instead of calling
         //            Tensor::Matmul() to ensure this custom backward follows
         //            same dtype and accumulation policy as default MHA method.
-        // grad_v_repeated: (B, H_q, T_l, D)
+        // grad_v_repeated: (B, H_q, T_k, D)
         auto grad_v_repeated =
             Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-                {device, "MatmulBackwardOther"}, probs, grad_output,
+                {device, "MatmulBackwardOther"}, probs, grad_output_chunk,
                 v_for_attn->Dims());
-        // grad_probs: (B, H_q, T_l, T_l)
+        // grad_probs: (B, H_q, T_q, T_k)
         auto grad_probs = Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-            {device, "MatmulBackwardInput"}, v_for_attn, grad_output,
+            {device, "MatmulBackwardInput"}, v_for_attn, grad_output_chunk,
             probs->Dims());
-        // grad_scores: (B, H_q, T_l, T_l)
-        auto grad_scores = probs * (grad_probs - softmax_delta);
-        // grad_scores_scaled: (B, H_q, T_l, T_l)
+        // grad_scores: (B, H_q, T_q, T_k)
+        auto grad_scores = probs * (grad_probs - row_delta);
+        // grad_scores_scaled: (B, H_q, T_q, T_k)
         auto grad_scores_scaled = grad_scores * scale;
-        // grad_q_chunk: (B, H_q, T_l, D)
+        // grad_q_chunk: (B, H_q, T_q, D), then pad to the local Q layout.
         auto grad_q_chunk =
             Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
                 {device, "MatmulBackwardInput"}, k_for_attn->Transpose(-2, -1),
-                grad_scores_scaled, q->Dims());
+                grad_scores_scaled, query->Dims());
+        if (query_start > 0) {
+          grad_q_chunk = nn::function::Concat(
+              {NewZeroTensorLike(grad_q_chunk), grad_q_chunk}, 2);
+        }
         grad_q_chunks.push_back(grad_q_chunk);
-        // grad_k_transposed: (B, H_q, D, T_l)
+        // grad_k_transposed: (B, H_q, D, T_k)
         auto grad_k_transposed =
             Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
-                {device, "MatmulBackwardOther"}, q, grad_scores_scaled,
+                {device, "MatmulBackwardOther"}, query, grad_scores_scaled,
                 k_for_attn->Transpose(-2, -1)->Dims());
-        // grad_k_repeated: (B, H_q, T_l, D)
+        // grad_k_repeated: (B, H_q, T_k, D)
         auto grad_k_repeated = grad_k_transposed->Transpose(-2, -1);
 
-        // SumRepeatedKVHeads maps repeated GQA gradients from (B, H_q, T_l, D)
-        // to (B, H_kv, T_l, D).
+        // Sum repeated GQA heads, then restore the owner's full KV layout.
         local_grad_k = SumRepeatedKVHeads(grad_k_repeated, n_rep);
         local_grad_v = SumRepeatedKVHeads(grad_v_repeated, n_rep);
+        if (kv_length < local_t) {
+          local_grad_k = nn::function::Concat(
+              {local_grad_k, NewZeroTensorLike(local_grad_k)}, 2);
+          local_grad_v = nn::function::Concat(
+              {local_grad_v, NewZeroTensorLike(local_grad_v)}, 2);
+        }
       }
 
       std::shared_ptr<Tensor> next_grad_k;
@@ -848,10 +1011,6 @@ std::shared_ptr<Tensor> AllToAllHeadToSeqCPRegionFunc(
 // CP State Helper Functions
 int GetContextParallelRank() { return cp_rank; }
 
-int64_t GetContextParallelSequenceStart(int64_t local_sequence_length) {
-  return static_cast<int64_t>(GetContextParallelRank()) * local_sequence_length;
-}
-
 // CP Communication Helper Functions
 std::shared_ptr<Tensor> SliceAlongCPRegionFunc(
     const std::shared_ptr<Tensor> &input, int64_t dim) {
@@ -860,18 +1019,11 @@ std::shared_ptr<Tensor> SliceAlongCPRegionFunc(
     return input;
   }
 
-  int64_t normalized_dim = dim;
-  if (normalized_dim < 0) {
-    normalized_dim += static_cast<int64_t>(input->Dims().size());
-  }
-  CHECK_GE(normalized_dim, 0);
-  CHECK_LT(normalized_dim, static_cast<int64_t>(input->Dims().size()));
-  const auto dim_size = input->Dims()[normalized_dim];
-  CHECK_EQ(dim_size % cp_size, 0)
-      << "Sequence dimension must be divisible by CP size";
-  const int64_t local_size = dim_size / cp_size;
-  const int64_t start = GetContextParallelSequenceStart(local_size);
-  return input->Slice(normalized_dim, start, start + local_size, 1)
+  // FIXME: CP size/layout changes downstream SP token ownership and TP
+  // ReduceScatter partitioning. BF16 summation can then round differently
+  // from non-CP even with identical local GEMM results. Keep input-dtype
+  // communication; validate long-run loss/gradient alignment across layouts.
+  return SliceCPRank(input, dim, GetContextParallelRank(), cp_size)
       ->Contiguous();
 }
 
@@ -980,9 +1132,9 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2AKVP2P(
       factory->Get(GetHierarchicalContextParallelProcessGroupName(
           device.Rank().GlobalRank(), 1));
 
-  // Adjacent CP ranks become one contiguous sequence block, with heads sharded
-  // across the A2A group. (B, H, S/CP, D) -> (B, H/A, S/P, D), where CP = A *
-  // P.
+  // A2A joins adjacent ranks into a contiguous block or a zigzag pair of
+  // blocks, with heads sharded across the A2A group.
+  // (B, H, S/CP, D) -> (B, H/A, S/P, D), where CP = A * P.
   auto q_shard = AllToAllSeqToHeadCPRegionFunc(q, a2a_group);
   auto k_shard = AllToAllSeqToHeadCPRegionFunc(k, a2a_group);
   auto v_shard = AllToAllSeqToHeadCPRegionFunc(v, a2a_group);
@@ -991,6 +1143,8 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2AKVP2P(
   auto ring_mask = GatherAlongFirstDim(mask->Transpose(0, 2), a2a_group)
                        ->Transpose(0, 2)
                        ->Contiguous();
+  ring_mask =
+      ReorderCPSequence(ring_mask, 2, sizes[0], /*to_sequence_order=*/true);
   auto output = std::make_shared<AttnWithCPAndKVP2P>(p2p_group)->Apply(
       {q_shard, k_shard, v_shard, ring_mask})[0];
   return AllToAllHeadToSeqCPRegionFunc(output, a2a_group);

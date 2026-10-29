@@ -121,6 +121,8 @@ DEFINE_uint32(context_parallel, 1, "Context Parallel world size");
 DEFINE_string(
     cp_comm_type, "p2p",
     "Context Parallel communication type (all_gather|p2p|a2a|a2a+p2p)");
+DEFINE_string(attention_cp_layout, "contiguous",
+              "Context Parallel sequence layout (contiguous|zigzag)");
 DEFINE_string(hierarchical_context_parallel_sizes, "",
               "A2A,P2P subgroup sizes for a2a+p2p, e.g. 2,2");
 DEFINE_uint32(
@@ -215,6 +217,10 @@ DEFINE_validator(zero_stage, [](const char *, int32_t value) {
 DEFINE_validator(lr_decay_style, [](const char *, const std::string &value) {
   return kSupportedLRDecayStyles.contains(value);
 });
+DEFINE_validator(attention_cp_layout,
+                 [](const char *, const std::string &value) {
+                   return value == "contiguous" || value == "zigzag";
+                 });
 DEFINE_validator(cp_comm_type, [](const char *, const std::string &value) {
   return value == "all_gather" || value == "p2p" || value == "a2a" ||
          value == "a2a+p2p";
@@ -252,8 +258,10 @@ void Train(const nn::parallel::Rank &rank) {
   const auto cp_local_sequence_length = FLAGS_sequence_length / cp_world_size;
 
   if (cp_world_size > 1) {
-    CHECK_EQ(FLAGS_sequence_length % cp_world_size, 0)
-        << "sequence_length must be divisible by context_parallel.";
+    const int sequence_parts =
+        cp_world_size * (global::GetAttentionCPLayout() == "zigzag" ? 2 : 1);
+    CHECK_EQ(FLAGS_sequence_length % sequence_parts, 0)
+        << "sequence_length must be divisible by CP size (2 * CP for zigzag).";
   }
   if (FLAGS_sequence_parallel) {
     CHECK_EQ(cp_local_sequence_length % tp_world_size, 0)
@@ -803,7 +811,8 @@ int main(int argc, char *argv[]) {
       FLAGS_pipeline_parallel, FLAGS_virtual_pipeline_parallel,
       /*expert_parallel_size=*/1,
       /*expert_tensor_parallel_size=*/1, FLAGS_context_parallel,
-      FLAGS_cp_comm_type, FLAGS_hierarchical_context_parallel_sizes);
+      FLAGS_cp_comm_type, FLAGS_hierarchical_context_parallel_sizes,
+      FLAGS_attention_cp_layout);
   utils::PrecisionCheckEnv::Instance().Init(precision_config);
 
   LOG(INFO) << nn::parallel::global::ProcessGroupOverview();

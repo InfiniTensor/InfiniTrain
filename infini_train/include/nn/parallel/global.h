@@ -71,7 +71,8 @@ class GlobalEnv {
             std::optional<int> expert_tensor_parallel_size,
             int context_parallel_size = 1,
             const std::string &context_parallel_comm_type = "p2p",
-            const std::string &hierarchical_context_parallel_sizes = "");
+            const std::string &hierarchical_context_parallel_sizes = "",
+            const std::string &attention_cp_layout = "contiguous");
 
   int nnodes() const;
 
@@ -95,6 +96,7 @@ class GlobalEnv {
 
   int context_parallel_size() const;
   const std::string &context_parallel_comm_type() const;
+  const std::string &attention_cp_layout() const;
   const std::vector<int> &hierarchical_context_parallel_sizes() const;
 
   int data_parallel_size() const;
@@ -134,6 +136,7 @@ class GlobalEnv {
 
   int context_parallel_size_ = 1;
   std::string context_parallel_comm_type_ = "p2p";
+  std::string attention_cp_layout_ = "contiguous";
   std::vector<int> hierarchical_context_parallel_sizes_;
 
   int data_parallel_size_ = 1;
@@ -157,12 +160,14 @@ inline void InitAllEnv(
     std::optional<int> expert_tensor_parallel_size,
     int context_parallel_size = 1,
     const std::string &context_parallel_comm_type = "p2p",
-    const std::string &hierarchical_context_parallel_sizes = "") {
+    const std::string &hierarchical_context_parallel_sizes = "",
+    const std::string &attention_cp_layout = "contiguous") {
   GlobalEnv::Instance().Init(
       nthread_per_process, tensor_parallel_size, sequence_parallel_enabled,
       pipeline_parallel_size, virtual_pipeline_parallel, expert_parallel_size,
       expert_tensor_parallel_size, context_parallel_size,
-      context_parallel_comm_type, hierarchical_context_parallel_sizes);
+      context_parallel_comm_type, hierarchical_context_parallel_sizes,
+      attention_cp_layout);
 }
 inline int GetNnodes() { return GlobalEnv::Instance().nnodes(); }
 inline int GetWorldSize() { return GlobalEnv::Instance().world_size(); }
@@ -197,6 +202,9 @@ inline int GetContextParallelSize() {
 }
 inline const std::string &GetContextParallelCommType() {
   return GlobalEnv::Instance().context_parallel_comm_type();
+}
+inline const std::string &GetAttentionCPLayout() {
+  return GlobalEnv::Instance().attention_cp_layout();
 }
 inline const std::vector<int> &GetHierarchicalContextParallelSizes() {
   return GlobalEnv::Instance().hierarchical_context_parallel_sizes();

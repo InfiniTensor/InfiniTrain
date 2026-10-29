@@ -309,7 +309,8 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
                      std::optional<int> expert_tensor_parallel_size,
                      int context_parallel_size,
                      const std::string &context_parallel_comm_type,
-                     const std::string &hierarchical_context_parallel_sizes) {
+                     const std::string &hierarchical_context_parallel_sizes,
+                     const std::string &attention_cp_layout) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -348,6 +349,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
   CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
   context_parallel_size_ = context_parallel_size;
   context_parallel_comm_type_ = context_parallel_comm_type;
+  CHECK(attention_cp_layout == "contiguous" || attention_cp_layout == "zigzag")
+      << "Unsupported attention CP layout: " << attention_cp_layout;
+  attention_cp_layout_ = attention_cp_layout;
   CHECK(context_parallel_comm_type == "p2p" ||
         context_parallel_comm_type == "all_gather" ||
         context_parallel_comm_type == "a2a" ||
@@ -476,6 +480,11 @@ int GlobalEnv::context_parallel_size() const {
 const std::string &GlobalEnv::context_parallel_comm_type() const {
   CHECK(initialized_) << "GlobalEnv is not initialized!";
   return context_parallel_comm_type_;
+}
+
+const std::string &GlobalEnv::attention_cp_layout() const {
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return attention_cp_layout_;
 }
 
 const std::vector<int> &GlobalEnv::hierarchical_context_parallel_sizes() const {
