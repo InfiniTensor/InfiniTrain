@@ -213,18 +213,18 @@ LoRATensorSharding GetLoRATensorSharding(
 
 bool IsPrimarySaveTPGroupRank() {
   const int global_rank = parallel::global::thread_global_rank;
-  int dp, tp, pp, ep;
-  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp,
-                                                    ep);
-  return dp == 0 && pp == 0;
+  int dp, tp, pp, ep, cp;
+  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep,
+                                                    cp);
+  return dp == 0 && cp == 0 && pp == 0;
 }
 
 bool IsSaveWriterRank() {
   const int global_rank = parallel::global::thread_global_rank;
-  int dp, tp, pp, ep;
-  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp,
-                                                    ep);
-  return dp == 0 && tp == 0 && pp == 0;
+  int dp, tp, pp, ep, cp;
+  parallel::global::GetDenseRankGenerator().CoordOf(global_rank, dp, tp, pp, ep,
+                                                    cp);
+  return dp == 0 && tp == 0 && cp == 0 && pp == 0;
 }
 
 std::shared_ptr<Tensor> ExportLoRATensorForSave(

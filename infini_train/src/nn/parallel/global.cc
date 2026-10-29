@@ -2,10 +2,12 @@
 
 #include <algorithm>
 #include <array>
+#include <charconv>
 #include <cstdlib>
 #include <format>
 #include <sstream>
 #include <string>
+#include <system_error>
 
 #include "glog/logging.h"
 
@@ -42,6 +44,8 @@ const char *AxisName(Axis axis) {
     return "TP";
   } else if (axis == kPp) {
     return "PP";
+  } else if (axis == kCp) {
+    return "CP";
   } else if (axis == kEp) {
     return "EP";
   }
@@ -53,7 +57,8 @@ std::string OrderString(const RankGenerator &rank_generator, bool expert_view) {
   bool is_first_axis = true;
   for (int index = 0; index < kAxisCount; ++index) {
     const Axis axis = rank_generator.order()[index];
-    if (!expert_view && axis == kEp) {
+    if ((!expert_view && axis == kEp) ||
+        (axis == kCp && rank_generator.AxisSize(kCp) == 1)) {
       continue;
     }
     if (!is_first_axis) {
@@ -110,12 +115,14 @@ void AppendDenseRankView(std::ostringstream &oss,
   CHECK_EQ(rank_generator.AxisSize(kEp), 1)
       << "The dense rank view must not contain an expert-parallel axis";
   oss << std::format(
-      "[Dense Rank View] shape={{TP={}, DP={}, PP={}}}, order={{ {} }}\n",
-      rank_generator.AxisSize(kTp), rank_generator.AxisSize(kDp),
-      rank_generator.AxisSize(kPp),
+      "[Dense Rank View] shape={{TP={}, CP={}, DP={}, PP={}}}, order={{ {} "
+      "}}\n",
+      rank_generator.AxisSize(kTp), rank_generator.AxisSize(kCp),
+      rank_generator.AxisSize(kDp), rank_generator.AxisSize(kPp),
       OrderString(rank_generator, /*expert_view=*/false));
   AppendGroups(oss, "DP", rank_generator, {kDp}, skip_trivial_axes);
   AppendGroups(oss, "TP", rank_generator, {kTp}, skip_trivial_axes);
+  AppendGroups(oss, "CP", rank_generator, {kCp}, skip_trivial_axes);
   AppendGroups(oss, "PP", rank_generator, {kPp}, skip_trivial_axes);
 }
 
@@ -138,12 +145,14 @@ void AppendExpertRankView(std::ostringstream &oss,
 
 RankGenerator::RankGenerator(int tensor_parallel_size, int expert_parallel_size,
                              int data_parallel_size, int pipeline_parallel_size,
+                             int context_parallel_size,
                              std::array<Axis, kAxisCount> order)
     : order_(order) {
   sizes_[kDp] = data_parallel_size;
   sizes_[kTp] = tensor_parallel_size;
   sizes_[kPp] = pipeline_parallel_size;
   sizes_[kEp] = expert_parallel_size;
+  sizes_[kCp] = context_parallel_size;
 
   for (const int size : sizes_) {
     CHECK_GE(size, 1) << "Parallel axis size must be >= 1";
@@ -178,8 +187,8 @@ const std::array<Axis, kAxisCount> &RankGenerator::order() const {
   return order_;
 }
 
-int RankGenerator::RankOf(int dp, int tp, int pp, int ep) const {
-  const int coord[kAxisCount] = {dp, tp, pp, ep};
+int RankGenerator::RankOf(int dp, int tp, int pp, int ep, int cp) const {
+  const int coord[kAxisCount] = {dp, tp, pp, ep, cp};
   int r = 0;
   for (int i = 0; i < kAxisCount; ++i) {
     const Axis ax = static_cast<Axis>(i);
@@ -188,20 +197,21 @@ int RankGenerator::RankOf(int dp, int tp, int pp, int ep) const {
   return r;
 }
 
-void RankGenerator::CoordOf(int rank, int &dp, int &tp, int &pp,
-                            int &ep) const {
+void RankGenerator::CoordOf(int rank, int &dp, int &tp, int &pp, int &ep,
+                            int &cp) const {
   dp = (rank / strides_[kDp]) % sizes_[kDp];
   tp = (rank / strides_[kTp]) % sizes_[kTp];
   pp = (rank / strides_[kPp]) % sizes_[kPp];
   ep = (rank / strides_[kEp]) % sizes_[kEp];
+  cp = (rank / strides_[kCp]) % sizes_[kCp];
 }
 
 int RankGenerator::GroupId(std::initializer_list<Axis> varying_axes,
                            int global_rank) const {
   const auto varying_axis_mask = MakeAxisMask(varying_axes);
-  int dp, tp, pp, ep;
-  CoordOf(global_rank, dp, tp, pp, ep);
-  const std::array<int, kAxisCount> coordinates{dp, tp, pp, ep};
+  int dp, tp, pp, ep, cp;
+  CoordOf(global_rank, dp, tp, pp, ep, cp);
+  const std::array<int, kAxisCount> coordinates{dp, tp, pp, ep, cp};
 
   // Preserve the legacy Layout::GroupId numbering used in process-group
   // names: fixed axes later in rank order vary faster in the group ordinal.
@@ -253,9 +263,9 @@ std::vector<std::vector<int>> RankGenerator::GetRanks(Axis varying_axis) const {
 std::vector<int> RankGenerator::GroupRanks(
     std::initializer_list<Axis> varying_axes, int global_rank) const {
   const auto varying_axis_mask = MakeAxisMask(varying_axes);
-  int dp, tp, pp, ep;
-  CoordOf(global_rank, dp, tp, pp, ep);
-  std::array<int, kAxisCount> coordinates{dp, tp, pp, ep};
+  int dp, tp, pp, ep, cp;
+  CoordOf(global_rank, dp, tp, pp, ep, cp);
+  std::array<int, kAxisCount> coordinates{dp, tp, pp, ep, cp};
 
   int group_size = 1;
   for (int axis = 0; axis < kAxisCount; ++axis) {
@@ -277,7 +287,7 @@ std::vector<int> RankGenerator::GroupRanks(
     }
     CHECK_EQ(remaining_index, 0);
     ranks.push_back(RankOf(coordinates[kDp], coordinates[kTp], coordinates[kPp],
-                           coordinates[kEp]));
+                           coordinates[kEp], coordinates[kCp]));
   }
   return ranks;
 }
@@ -296,7 +306,11 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
                      bool sequence_parallel_enabled, int pipeline_parallel_size,
                      int virtual_pipeline_parallel_size,
                      int expert_parallel_size,
-                     std::optional<int> expert_tensor_parallel_size) {
+                     std::optional<int> expert_tensor_parallel_size,
+                     int context_parallel_size,
+                     const std::string &context_parallel_comm_type,
+                     const std::string &hierarchical_context_parallel_sizes,
+                     const std::string &attention_cp_layout) {
   std::lock_guard<std::mutex> lock(mutex_);
 
   CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -332,14 +346,50 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
   tensor_parallel_size_ = tensor_parallel_size;
   expert_tensor_parallel_size_ = resolved_expert_tensor_parallel_size;
   sequence_parallel_enabled_ = sequence_parallel_enabled;
+  CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
+  context_parallel_size_ = context_parallel_size;
+  context_parallel_comm_type_ = context_parallel_comm_type;
+  CHECK(attention_cp_layout == "contiguous" || attention_cp_layout == "zigzag")
+      << "Unsupported attention CP layout: " << attention_cp_layout;
+  attention_cp_layout_ = attention_cp_layout;
+  CHECK(context_parallel_comm_type == "p2p" ||
+        context_parallel_comm_type == "all_gather" ||
+        context_parallel_comm_type == "a2a" ||
+        context_parallel_comm_type == "a2a+p2p")
+      << "Unsupported CP communication type: " << context_parallel_comm_type;
+  if (context_parallel_comm_type == "a2a+p2p") {
+    const auto separator = hierarchical_context_parallel_sizes.find(',');
+    CHECK(separator != std::string::npos)
+        << "hierarchical_context_parallel_sizes must be A,P";
+    const auto *begin = hierarchical_context_parallel_sizes.data();
+    const auto *end = begin + hierarchical_context_parallel_sizes.size();
+    int a2a_size = 0, p2p_size = 0;
+    const auto a2a_result = std::from_chars(begin, begin + separator, a2a_size);
+    const auto p2p_result =
+        std::from_chars(begin + separator + 1, end, p2p_size);
+    CHECK(a2a_result.ec == std::errc{} && a2a_result.ptr == begin + separator &&
+          p2p_result.ec == std::errc{} && p2p_result.ptr == end)
+        << "hierarchical_context_parallel_sizes must contain exactly two "
+           "integers: A,P";
+    CHECK_GT(a2a_size, 0);
+    CHECK_GT(p2p_size, 0);
+    CHECK_EQ(static_cast<int64_t>(a2a_size) * p2p_size, context_parallel_size)
+        << "A2A size * P2P size must equal context_parallel";
+    hierarchical_context_parallel_sizes_ = {a2a_size, p2p_size};
+  } else {
+    CHECK(hierarchical_context_parallel_sizes.empty())
+        << "hierarchical_context_parallel_sizes requires cp_comm_type=a2a+p2p";
+  }
+
   pipeline_parallel_size_ = pipeline_parallel_size;
   virtual_pipeline_parallel_size_ = virtual_pipeline_parallel_size;
   expert_parallel_size_ = expert_parallel_size;
 
   const int dense_model_parallel_size =
-      tensor_parallel_size_ * pipeline_parallel_size_;
+      tensor_parallel_size_ * context_parallel_size_ * pipeline_parallel_size_;
   CHECK_EQ(world_size_ % dense_model_parallel_size, 0)
       << "World size must be divisible by tensor_parallel_size * "
+         "context_parallel_size * "
          "pipeline_parallel_size";
   data_parallel_size_ = world_size_ / dense_model_parallel_size;
 
@@ -354,9 +404,9 @@ void GlobalEnv::Init(int nthread_per_process, int tensor_parallel_size,
 
   // These are two logical views over the same physical ranks. TP and DP in
   // the expert generator are exposed as ETP and EDP, respectively.
-  dense_rank_generator_ =
-      RankGenerator(tensor_parallel_size_, /*expert_parallel_size=*/1,
-                    data_parallel_size_, pipeline_parallel_size_);
+  dense_rank_generator_ = RankGenerator(
+      tensor_parallel_size_, /*expert_parallel_size=*/1, data_parallel_size_,
+      pipeline_parallel_size_, context_parallel_size_);
   expert_rank_generator_ =
       RankGenerator(expert_tensor_parallel_size_, expert_parallel_size_,
                     expert_data_parallel_size_, pipeline_parallel_size_);
@@ -422,6 +472,26 @@ bool GlobalEnv::sequence_parallel_enabled() const {
   return sequence_parallel_enabled_;
 }
 
+int GlobalEnv::context_parallel_size() const {
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return context_parallel_size_;
+}
+
+const std::string &GlobalEnv::context_parallel_comm_type() const {
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return context_parallel_comm_type_;
+}
+
+const std::string &GlobalEnv::attention_cp_layout() const {
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return attention_cp_layout_;
+}
+
+const std::vector<int> &GlobalEnv::hierarchical_context_parallel_sizes() const {
+  CHECK(initialized_) << "GlobalEnv is not initialized!";
+  return hierarchical_context_parallel_sizes_;
+}
+
 int GlobalEnv::data_parallel_size() const {
   CHECK(initialized_) << "GlobalEnv is not initialized!";
   return data_parallel_size_;
@@ -462,9 +532,10 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator,
   std::ostringstream oss;
   oss << std::format(
       "\n=== Parallel Communication Groups ===\n"
-      "world_size = {}, config: {{DP={}, TP={}, PP={}}}\n",
+      "world_size = {}, config: {{DP={}, TP={}, CP={}, PP={}}}\n",
       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
-      dense_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp));
+      dense_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kCp),
+      dense_rank_generator.AxisSize(kPp));
   AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
   oss << "\n";
   return oss.str();
@@ -479,12 +550,12 @@ std::string ProcessGroupOverview(const RankGenerator &dense_rank_generator,
   std::ostringstream oss;
   oss << std::format(
       "\n=== Parallel Communication Groups ===\n"
-      "world_size = {}, config: {{DP={}, EDP={}, TP={}, ETP={}, PP={}, "
+      "world_size = {}, config: {{DP={}, EDP={}, TP={}, ETP={}, CP={}, PP={}, "
       "EP={}}}\n",
       dense_rank_generator.WorldSize(), dense_rank_generator.AxisSize(kDp),
       expert_rank_generator.AxisSize(kDp), dense_rank_generator.AxisSize(kTp),
-      expert_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kPp),
-      expert_rank_generator.AxisSize(kEp));
+      expert_rank_generator.AxisSize(kTp), dense_rank_generator.AxisSize(kCp),
+      dense_rank_generator.AxisSize(kPp), expert_rank_generator.AxisSize(kEp));
 
   AppendDenseRankView(oss, dense_rank_generator, skip_trivial_axes);
   oss << "\n";

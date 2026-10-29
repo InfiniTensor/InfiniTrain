@@ -25,9 +25,9 @@ namespace {
 
 std::vector<int64_t> LocalExpertIds(int64_t num_local_experts,
                                     int global_rank) {
-  int dp, tp, pp, ep_rank;
+  int dp, tp, pp, ep_rank, cp;
   parallel::global::GetExpertRankGenerator().CoordOf(global_rank, dp, tp, pp,
-                                                     ep_rank);
+                                                     ep_rank, cp);
   const int64_t local_expert_start = ep_rank * num_local_experts;
   std::vector<int64_t> local_expert_ids(num_local_experts);
   std::iota(local_expert_ids.begin(), local_expert_ids.end(),
