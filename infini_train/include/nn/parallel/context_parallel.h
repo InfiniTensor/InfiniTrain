@@ -13,8 +13,6 @@ extern thread_local int cp_rank;
 
 int GetContextParallelRank();
 
-int64_t GetContextParallelSequenceStart(int64_t local_sequence_length);
-
 std::shared_ptr<Tensor> SliceAlongCPRegionFunc(
     const std::shared_ptr<Tensor> &input, int64_t dim);
 

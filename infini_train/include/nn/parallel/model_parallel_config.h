@@ -40,6 +40,7 @@ struct ModelParallelConfig {
   int context_model_parallel_size = 1;
   std::string context_parallel_comm_type = "p2p";
   std::string hierarchical_context_parallel_sizes;
+  std::string attention_cp_layout = "contiguous";
 };
 
 }  // namespace infini_train::nn::parallel

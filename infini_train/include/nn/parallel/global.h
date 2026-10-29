@@ -92,6 +92,7 @@ class GlobalEnv {
 
   int context_parallel_size() const;
   const std::string &context_parallel_comm_type() const;
+  const std::string &attention_cp_layout() const;
   const std::vector<int> &hierarchical_context_parallel_sizes() const;
 
   int data_parallel_size() const;
@@ -129,6 +130,7 @@ class GlobalEnv {
 
   int context_parallel_size_ = 1;
   std::string context_parallel_comm_type_ = "p2p";
+  std::string attention_cp_layout_ = "contiguous";
   std::vector<int> hierarchical_context_parallel_sizes_;
 
   int data_parallel_size_ = 1;
@@ -181,6 +183,9 @@ inline int GetContextParallelSize() {
 }
 inline const std::string &GetContextParallelCommType() {
   return GlobalEnv::Instance().context_parallel_comm_type();
+}
+inline const std::string &GetAttentionCPLayout() {
+  return GlobalEnv::Instance().attention_cp_layout();
 }
 inline const std::vector<int> &GetHierarchicalContextParallelSizes() {
   return GlobalEnv::Instance().hierarchical_context_parallel_sizes();
