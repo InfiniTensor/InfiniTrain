@@ -1,5 +1,6 @@
 #include <cmath>
 #include <cstddef>
+#include <type_traits>
 
 #include <cub/block/block_reduce.cuh>
 
@@ -50,7 +51,9 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input,
   for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
     int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
     float exp_val = exp(common::cuda::Cast<float>(input[idx]) - row_max);
-    output[idx] = common::cuda::Cast<T>(exp_val);
+    if constexpr (std::is_same_v<T, float>) {
+      output[idx] = exp_val;
+    }
     thread_sum += exp_val;
   }
   float block_sum = BlockReduce(temp_storage_sum).Sum(thread_sum);
@@ -63,8 +66,15 @@ __global__ void SoftmaxForwardKernel(T *output, const T *input,
   // normalize
   for (int64_t axis = tid; axis < axis_size; axis += BLOCK_SIZE) {
     int64_t idx = (group * axis_size + axis) * inner_size + inner_idx;
-    output[idx] =
-        common::cuda::Cast<T>(common::cuda::Cast<float>(output[idx]) / row_sum);
+    if constexpr (std::is_same_v<T, float>) {
+      output[idx] /= row_sum;
+    } else {
+      // Do not use the low-precision output as scratch for the exponent: round
+      // only after normalization, matching attention probability recomputation.
+      const float exp_val =
+          exp(common::cuda::Cast<float>(input[idx]) - row_max);
+      output[idx] = common::cuda::Cast<T>(exp_val / row_sum);
+    }
   }
 }
 
