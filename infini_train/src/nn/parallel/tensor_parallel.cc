@@ -474,7 +474,7 @@ class LinearWithGradAccumulationAndAsyncCommunication
     if (need_weight && column_parallel_) {
       input_sequence_major = GatherSequenceMajor(
           local_input_sequence_major, tp_group_,
-          config.tp_comm_overlap && config.tp_comm_bulk_wgrad
+          config.tp_comm_overlap && config.tp_comm_bulk_dgrad
               ? &input_gather_work
               : nullptr);
     }
@@ -484,7 +484,7 @@ class LinearWithGradAccumulationAndAsyncCommunication
     std::vector<std::shared_ptr<Tensor>> partials;
     if (need_input && column_parallel_) {
       const bool bulk_rs = config.tp_comm_overlap &&
-                           config.tp_comm_bulk_dgrad &&
+                           config.tp_comm_bulk_wgrad &&
                            (need_weight || need_bias);
       if (config.tp_comm_overlap && config.tp_comm_overlap_rs_dgrad &&
           !disable_pipeline_) {

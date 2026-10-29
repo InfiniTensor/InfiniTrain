@@ -15,7 +15,14 @@ struct ModelParallelConfig {
   std::optional<int> expert_tensor_parallel_size = std::nullopt;
 
   bool tp_comm_overlap = false;
+  // FIXME(zbl): These flags explicitly enable/disable backward bulk overlap
+  //             here. Megatron/TE uses them to select Userbuffers bulk
+  //             optimizations; its ordinary SP backward can still overlap
+  //             async AG/RS when those optimizations are off. Revisit this
+  //             distinction when adding an optimized overlap backend.
+  // Overlap dgrad ReduceScatter with the wgrad GEMM.
   bool tp_comm_bulk_wgrad = true;
+  // Overlap activation AllGather with the dgrad GEMM.
   bool tp_comm_bulk_dgrad = true;
   // Pipeline AllGather with Column forward / Row backward GEMMs.
   bool tp_comm_overlap_ag = true;
