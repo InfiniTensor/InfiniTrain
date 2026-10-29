@@ -46,6 +46,9 @@ class ParamAndGradBucket {
    * @param gradient_scaling_factor Pre-collective gradient scale factor.
    * @param bucket_id               Bucket index in the owning
    * ParamAndGradBuffer.
+   * @param param_offsets           Parameter starts within this bucket,
+   * including alignment padding. Empty retains the contiguous layout for
+   * standalone callers.
    */
   ParamAndGradBucket(const std::vector<std::shared_ptr<Tensor>> &params,
                      const std::shared_ptr<Tensor> &param_data,
@@ -53,7 +56,8 @@ class ParamAndGradBucket {
                      const std::shared_ptr<Tensor> &grad_data,
                      DataType grad_dtype, size_t offset,
                      size_t num_elements_unpadded,
-                     float gradient_scaling_factor, size_t bucket_id);
+                     float gradient_scaling_factor, size_t bucket_id,
+                     const std::vector<size_t> &param_offsets = {});
 
   size_t bucket_id() const;
 

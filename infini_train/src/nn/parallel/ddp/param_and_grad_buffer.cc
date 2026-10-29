@@ -66,7 +66,7 @@ ParamAndGradBucket::ParamAndGradBucket(
     const std::shared_ptr<Tensor> &param_data, DataType param_dtype,
     const std::shared_ptr<Tensor> &grad_data, DataType grad_dtype,
     size_t offset, size_t num_elements_unpadded, float gradient_scaling_factor,
-    size_t bucket_id)
+    size_t bucket_id, const std::vector<size_t> &param_offsets)
     : bucket_id_(bucket_id),
       params_(std::move(params)),
       param_data_(std::move(param_data)),
@@ -77,8 +77,15 @@ ParamAndGradBucket::ParamAndGradBucket(
       num_elements_unpadded_(num_elements_unpadded),
       gradient_scaling_factor_(gradient_scaling_factor) {
   size_t current_offset = 0;
-  for (const auto &param : params_) {
+  CHECK(param_offsets.empty() || param_offsets.size() == params_.size());
+  for (size_t i = 0; i < params_.size(); ++i) {
+    const auto &param = params_[i];
+    if (!param_offsets.empty()) {
+      CHECK_GE(param_offsets[i], current_offset);
+      current_offset = param_offsets[i];
+    }
     auto numel = param->NumElements();
+    CHECK_LE(current_offset + numel, num_elements_unpadded_);
     param_to_range_.emplace(
         param.get(), std::make_pair(current_offset, current_offset + numel));
     current_offset += numel;
@@ -753,10 +760,19 @@ void ParamAndGradBuffer::BuildBuckets(DataType param_dtype,
           std::vector<int64_t>{static_cast<int64_t>(end_index - start_index)});
     }
 
+    // Keep the original aligned layout. Summing parameter lengths loses
+    // inter-parameter padding and directs optimizer updates into other
+    // parameters (or padding), especially for small bias/norm tensors.
+    std::vector<size_t> param_offsets;
+    param_offsets.reserve(bucket_params.size());
+    for (const auto &param : bucket_params) {
+      param_offsets.push_back(std::get<0>(param_index_map_.at(param.get())) -
+                              start_index);
+    }
     auto bucket = std::make_shared<ParamAndGradBucket>(
         bucket_params, bucket_param_view, param_dtype, bucket_grad_view,
         grad_dtype, start_index, num_elements_unpadded,
-        gradient_scaling_factor_, bucket_id);
+        gradient_scaling_factor_, bucket_id, param_offsets);
 
     for (auto param : bucket_params) {
       CHECK(param_bucket_map_.find(param.get()) == param_bucket_map_.end())
