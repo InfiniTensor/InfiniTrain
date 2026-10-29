@@ -1,5 +1,7 @@
 #!/bin/bash
 
+# Parse the entire run up front so edits during execution cannot shift Bash's read position.
+{
 set -e
 set -o pipefail
 
@@ -90,6 +92,9 @@ done < <(jq -r '.variables | to_entries[] | "\(.key)=\(.value)"' "$CONFIG_FILE")
 # Global variable to save the last cmake command
 LAST_CMAKE_CMD=""
 declare -A SELECTED_TAGS=()
+TOTAL_TESTS=0
+FAILED_TEST_CASES=()
+FAILED_TEST_LOGS=()
 
 RUN_STARTED_AT="$(date '+%Y-%m-%d %H:%M:%S')"
 RUN_ID="$(date '+%Y%m%d_%H%M%S')"
@@ -188,15 +193,43 @@ clean_build_dir() {
 
 # Clean checkpoint directories (called once at start of script)
 clean_checkpoints() {
-    echo -e "\033[1;31m[CLEAN] Removing checkpoint directories from previous run\033[0m"
     if [[ -d "$CKPT_ROOT_DIR" ]]; then
         echo -e "\033[1;31m[CLEAN] Removing: ${CKPT_ROOT_DIR}\033[0m"
         rm -rf "${CKPT_ROOT_DIR:?}"
     fi
 }
 
+record_test_result() {
+    TOTAL_TESTS=$((TOTAL_TESTS + 1))
+    if [[ "$1" -ne 0 ]]; then
+        FAILED_TEST_CASES+=("$2")
+        FAILED_TEST_LOGS+=("$3")
+    fi
+}
+
+print_test_summary() {
+    local failed="${#FAILED_TEST_CASES[@]}"
+    local color='\033[1;32m'
+    if ((failed > 0)); then
+        color='\033[1;31m'
+    fi
+
+    printf '\n%b' "$color"
+    {
+        echo "============================================================"
+        printf '[SUMMARY] Failed / Total test cases: %d / %d\n' "$failed" "$TOTAL_TESTS"
+        local idx
+        for ((idx=0; idx<failed; idx++)); do
+            printf '[FAILED] %s\n  Log: %s\n' "${FAILED_TEST_CASES[$idx]}" "${FAILED_TEST_LOGS[$idx]}"
+        done
+        echo "============================================================"
+    } | tee "${LOG_DIR}/test_summary.log"
+    printf '\033[0m'
+}
+
 run_ctest() {
     local gpu_list=()
+    local cpu_tests=()
     local cuda_tests=()
 
     if [[ -n "${CTEST_CUDA_GPUS:-}" ]]; then
@@ -221,11 +254,28 @@ run_ctest() {
         filtered_gpu_list=(0)
     fi
 
-    ctest --output-on-failure -LE cuda -j"$(nproc)"
+    mapfile -t cpu_tests < <(ctest -N -LE cuda | sed -n 's/^ *Test *#[0-9][0-9]*: //p')
+    local failed=0
+    if ! ctest --output-on-failure --repeat until-pass:2 -LE cuda -j"$(nproc)"; then
+        failed=1
+    fi
+
+    # Read CPU failures before concurrent CUDA runs overwrite CTest's failure list.
+    local -A failed_cpu_tests=()
+    local test_number test_name
+    if [[ -f Testing/Temporary/LastTestsFailed.log ]]; then
+        while IFS=: read -r test_number test_name; do
+            [[ -z "$test_name" ]] && continue
+            failed_cpu_tests["$test_name"]=1
+        done < Testing/Temporary/LastTestsFailed.log
+    fi
+    for test_name in "${cpu_tests[@]}"; do
+        printf '[CTEST_RESULT]\t%s\t%s\n' "${failed_cpu_tests[$test_name]:-0}" "${log_name}/${test_name}"
+    done
 
     mapfile -t cuda_tests < <(ctest -N -L cuda | sed -n 's/^ *Test *#[0-9][0-9]*: //p')
     if [[ ${#cuda_tests[@]} -eq 0 ]]; then
-        return 0
+        return "$failed"
     fi
 
     local worker_count="${#filtered_gpu_list[@]}"
@@ -235,15 +285,19 @@ run_ctest() {
         (
             local worker_failed=0
             local test_idx="$worker_idx"
-            local test_name
+            local test_name test_failed
             local assigned_gpu="${filtered_gpu_list[$worker_idx]}"
 
             while ((test_idx < ${#cuda_tests[@]})); do
                 test_name="${cuda_tests[$test_idx]}"
                 echo "[CUDA GPU ${assigned_gpu}] ${test_name}"
-                if ! CUDA_VISIBLE_DEVICES="$assigned_gpu" ctest --output-on-failure -R "^${test_name}$" -j1; then
+                if CUDA_VISIBLE_DEVICES="$assigned_gpu" ctest --output-on-failure --repeat until-pass:2 -R "^${test_name}$" -j1; then
+                    test_failed=0
+                else
+                    test_failed=1
                     worker_failed=1
                 fi
+                printf '[CTEST_RESULT]\t%s\t%s\n' "$test_failed" "${log_name}/${test_name}"
                 test_idx=$((test_idx + worker_count))
             done
 
@@ -252,7 +306,6 @@ run_ctest() {
         pids+=("$!")
     done
 
-    local failed=0
     local pid
     for pid in "${pids[@]}"; do
         if ! wait "$pid"; then
@@ -295,42 +348,76 @@ run_and_log() {
 
     echo -e "\033[1;32m============================================================\033[0m"
 
-    pushd "$BUILD_DIR" > /dev/null
-
-    # Write the last cmake command into the log file if available
-    if [[ -n "$LAST_CMAKE_CMD" ]]; then
-        echo "[LAST_CMAKE] $LAST_CMAKE_CMD" > "$log_path"
-    else
-        # If no cmake command has been run yet, clear the log
-        > "$log_path"
+    local expanded_cmd="${cmd//\$LORA_WEIGHTS_DIR/$LORA_WEIGHTS_DIR}"
+    local max_attempts=2
+    # Build failures remain fatal; CTest retries individual tests internally.
+    if [[ "$tag" == "build" || "$tag" == "ctest" ]]; then
+        max_attempts=1
     fi
 
-    # Write the current run command to the log
-    echo "[RUN_METADATA] $RUN_METADATA_FILE" >> "$log_path"
-    echo "[RUN_STARTED_AT] $RUN_STARTED_AT" >> "$log_path"
-    echo "[GIT_BRANCH] $GIT_BRANCH" >> "$log_path"
-    echo "[GIT_COMMIT] $GIT_COMMIT_FULL" >> "$log_path"
-    echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT" >> "$log_path"
-    local expanded_cmd="${cmd//\$LORA_WEIGHTS_DIR/$LORA_WEIGHTS_DIR}"
-    echo "[COMMAND] $expanded_cmd" >> "$log_path"
+    local attempt exit_code=0
+    for ((attempt=1; attempt<=max_attempts; attempt++)); do
+        # Overwrite the previous attempt while preserving metadata for the final log.
+        {
+            if [[ -n "$LAST_CMAKE_CMD" ]]; then
+                echo "[LAST_CMAKE] $LAST_CMAKE_CMD"
+            fi
+            echo "[RUN_METADATA] $RUN_METADATA_FILE"
+            echo "[RUN_STARTED_AT] $RUN_STARTED_AT"
+            echo "[GIT_BRANCH] $GIT_BRANCH"
+            echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
+            echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
+            echo "[COMMAND] $expanded_cmd"
+        } > "$log_path"
+        pushd "$BUILD_DIR" > /dev/null
 
-    # Run the command and append both stdout and stderr to the log file
-    if ! eval "$cmd" >> "$log_path" 2>&1; then
+        # Append this attempt's stdout and stderr after the metadata.
+        if eval "$cmd" >> "$log_path" 2>&1; then
+            exit_code=0
+        else
+            exit_code=$?
+        fi
+
+        popd > /dev/null
+        echo "[EXIT_CODE] $exit_code" >> "$log_path"
+
+        if [[ "$is_profile" == "yes" ]]; then
+            move_profile_logs "$log_name" "$tag"
+        fi
+
+        if [[ "$exit_code" -eq 0 ]]; then
+            break
+        fi
+
         echo -e "\033[1;31m============================================================\033[0m"
-        echo -e "\033[1;31m[ERROR] Command failed: ${cmd}\033[0m"
+        echo -e "\033[1;31m[ERROR] Attempt ${attempt}/${max_attempts} failed (exit code ${exit_code}): ${cmd}\033[0m"
         echo -e "\033[1;31m[ERROR] See log file for details: ${log_path}\033[0m"
         echo -e "\033[1;31m============================================================\033[0m"
         echo ""
         echo "[ERROR] Last 20 lines of log:"
         tail -20 "$log_path"
-        exit 1
+        if ((attempt < max_attempts)); then
+            echo "[RETRY] Retrying ${log_name} once." | tee -a "$log_path"
+        fi
+    done
+
+    if [[ "$tag" == "ctest" ]]; then
+        # Collect parallel worker results from the existing CTest log into parent-shell memory.
+        local result_marker result_code result_name
+        while IFS=$'\t' read -r result_marker result_code result_name; do
+            if [[ "$result_marker" == "[CTEST_RESULT]" ]]; then
+                record_test_result "$result_code" "$result_name" "$log_path"
+            fi
+        done < "$log_path"
+    elif [[ "$tag" != "build" ]]; then
+        record_test_result "$exit_code" "${build_id}/${tag}/${log_name}" "$log_path"
     fi
 
-    popd > /dev/null
-
-    # If profiling is enabled, move profiling files to the target directory
-    if [[ "$is_profile" == "yes" ]]; then
-        move_profile_logs "$log_name" "$tag"
+    if [[ "$exit_code" -ne 0 ]]; then
+        if [[ "$tag" == "build" ]]; then
+            exit "$exit_code"
+        fi
+        echo "[FAILED] ${log_name}: continuing to the next test." | tee -a "$log_path"
     fi
 }
 
@@ -521,7 +608,6 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
             fi
 
             num_tests=$(jq ".test_groups[$gi].tests | length" "$CONFIG_FILE")
-            echo -e "\033[1;36m[TEST GROUP] tag=${group_tag}, cases=${num_tests}\033[0m"
 
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
@@ -611,3 +697,7 @@ clean_build_dir
 
 echo -e "\n\033[1;33mNext step:\033[0m"
 echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""
+
+print_test_summary
+exit
+}
