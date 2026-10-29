@@ -118,9 +118,9 @@ DEFINE_bool(sequence_parallel, false, "Whether to enable Sequence Parallel");
 DEFINE_bool(tp_comm_overlap, false,
             "Overlap tensor-parallel communication with Linear GEMMs");
 DEFINE_bool(tp_comm_bulk_wgrad, true,
-            "Overlap backward activation AllGather with dgrad GEMM");
-DEFINE_bool(tp_comm_bulk_dgrad, true,
             "Overlap backward dgrad ReduceScatter with wgrad GEMM");
+DEFINE_bool(tp_comm_bulk_dgrad, true,
+            "Overlap backward activation AllGather with dgrad GEMM");
 DEFINE_bool(tp_comm_overlap_ag, true,
             "Pipeline AllGather with Column forward / Row dgrad GEMMs");
 DEFINE_bool(tp_comm_overlap_rs, true,
