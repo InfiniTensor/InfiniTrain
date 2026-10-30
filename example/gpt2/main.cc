@@ -727,6 +727,9 @@ void Train(const nn::parallel::Rank &rank) {
 }
 
 int main(int argc, char *argv[]) {
+  gflags::SetUsageMessage(
+      "Train a GPT-2 model with InfiniTrain.\nUsage: " + std::string(argv[0]) +
+      " --input_bin=<training.bin> [options]");
   // Register provider metadata and implementations before gflags validates
   // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR

@@ -474,7 +474,7 @@ function(infini_train_add_privateuse1_test_suites)
     GTEST_PREFIX PRIVATEUSE1
     DEVICE_TYPE kPrivateUse1
     DEVICE_INDEX ${PRIVATEUSE1_DEVICE_INDEX}
-    LABELS ${PRIVATEUSE1_BACKEND_NAME} accelerator hardware
+    LABELS ${PRIVATEUSE1_BACKEND_NAME}
     TEST_MAIN_TARGET ${_privateuse1_main_target}
     LINK_LIBRARIES ${PRIVATEUSE1_LINK_LIBRARIES}
     ${_privateuse1_timeout_args}
