@@ -168,7 +168,8 @@ void DistributedOptimizer::BuildShardParamsAndBindGrads(
   }
 
   CHECK_GT(num_shard_params, 0)
-      << "DistributedOptimizer: this DP rank owns no param pieces. "
+      << "DistributedOptimizer: DP rank " << ddp_rank_
+      << " owns no param pieces. "
       << "Check bucket padding/divisibility and param bucketing order.";
 }
 

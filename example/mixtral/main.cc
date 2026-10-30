@@ -13,6 +13,10 @@
 #include <tuple>
 #include <vector>
 
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+#include <cstdlib>
+#endif
+
 #include "gflags/gflags.h"
 #include "glog/logging.h"
 
@@ -366,6 +370,9 @@ void Train(const nn::parallel::Rank &rank) {
 }
 
 int main(int argc, char *argv[]) {
+  gflags::SetUsageMessage("Train a Mixtral model with InfiniTrain.\nUsage: " +
+                          std::string(argv[0]) +
+                          " --input_bin=<training.bin> [options]");
   // Register provider metadata and implementations before gflags validates
   // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
@@ -413,8 +420,28 @@ int main(int argc, char *argv[]) {
     Train(rank);
   }
 
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+  // Capture the policy before shutting down gflags. Match the other external
+  // backend examples: MACA can fail during process-wide static destruction.
+  const bool skip_static_destruction =
+      INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS &&
+      Device::ParseType(FLAGS_device).value() ==
+          Device::DeviceType::kPrivateUse1;
+#endif
+
   gflags::ShutDownCommandLineFlags();
   google::ShutdownGoogleLogging();
+
+#ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_WORKAROUNDS
+  if (skip_static_destruction) {
+    // Train() has returned and all workers have joined, so rank-local tensors
+    // and optimizers have already been destroyed. Flush before bypassing the
+    // remaining global/SDK teardown; _Exit does not flush C++ streams.
+    std::cout.flush();
+    std::cerr.flush();
+    std::_Exit(0);
+  }
+#endif
 
   return 0;
 }

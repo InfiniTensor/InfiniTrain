@@ -44,6 +44,9 @@ DEFINE_validator(device, [](const char *, const std::string &value) {
 });
 
 int main(int argc, char *argv[]) {
+  gflags::SetUsageMessage("Train a model on MNIST with InfiniTrain.\nUsage: " +
+                          std::string(argv[0]) +
+                          " --dataset=<dataset_dir> [options]");
   gflags::ParseCommandLineFlags(&argc, &argv, true);
   google::InitGoogleLogging(argv[0]);
 

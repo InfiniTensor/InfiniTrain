@@ -62,7 +62,7 @@ if(USE_CUDA)
     GTEST_PREFIX CUDA
     DEVICE_TYPE kCUDA
     DEVICE_INDEX 0
-    LABELS cuda accelerator hardware
+    LABELS cuda
     ACCELERATOR
   )
 endif()
