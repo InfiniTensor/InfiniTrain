@@ -150,7 +150,7 @@ infini_train_add_privateuse1_test_suites(
 ```
 
 该调用为公共 suite 追加 `test_*_<BACKEND_NAME>` 目标；`DEVICE_INDEX` 默认为
-`0`。例如 `BACKEND_NAME=maca` 使用 `maca;accelerator;hardware` CTest 标签：
+`0`。例如 `BACKEND_NAME=maca` 使用 `maca` CTest 标签：
 
 ```bash
 ctest -L maca --output-on-failure  # MACA

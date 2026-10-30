@@ -11,7 +11,7 @@ infini_train_add_test(test_privateuse1_backend_validation
 if(USE_CUDA)
   infini_train_add_test(test_stream_guard_cuda
     SOURCES test_stream_guard.cc
-    LABELS cuda accelerator hardware
+    LABELS cuda
     BINARY_REGISTRATION
     RUN_SERIAL
     TEST_TIMEOUT 60

@@ -110,6 +110,10 @@ std::string GenerateLocalRunId() {
 }  // namespace
 
 int main(int argc, char **argv) {
+  gflags::SetUsageMessage(
+      "Launch distributed training with InfiniTrain.\nUsage: " +
+      std::string(argv[0]) +
+      " [launcher options] <training program> [training options]");
   const int train_program_index = FindTrainProgramIndex(argc, argv);
   std::vector<char *> launcher_argv =
       BuildLauncherArgv(train_program_index, argv);
