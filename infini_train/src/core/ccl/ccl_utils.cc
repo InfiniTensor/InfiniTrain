@@ -1,15 +1,18 @@
 #include "infini_train/include/core/ccl/ccl_utils.h"
 
 #include <arpa/inet.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <unistd.h>
 
 #include <cerrno>
 #include <chrono>
+#include <compare>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iterator>
 #include <limits>
 #include <string_view>

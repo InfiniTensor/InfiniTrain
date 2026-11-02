@@ -1,12 +1,16 @@
+// IWYU pragma: no_include <bits/types/sig_atomic_t.h>
 #include <arpa/inet.h>
 #include <fcntl.h>
 #include <netinet/in.h>
+#include <stdint.h>
 #include <sys/socket.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <compare>
 #include <condition_variable>
 #include <csignal>
 #include <cstdio>
@@ -17,9 +21,12 @@
 #include <map>
 #include <memory>
 #include <mutex>
+#include <ostream>
 #include <string>
+#include <system_error>
 #include <thread>
 #include <unordered_set>
+#include <utility>
 #include <vector>
 
 #include "gflags/gflags.h"
@@ -35,7 +42,7 @@ DEFINE_string(log_dir, "", "Directory for per-rank stdout/stderr logs");
 
 namespace {
 constexpr uint32_t kMagic = 0x49545244;
-volatile sig_atomic_t g_signal = 0;
+volatile std::sig_atomic_t g_signal = 0;
 void HandleSignal(int signal) { g_signal = signal; }
 
 bool IsLauncherFlag(const std::string &flag) {
