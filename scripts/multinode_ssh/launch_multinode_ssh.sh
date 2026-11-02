@@ -1,239 +1,194 @@
 #!/usr/bin/env bash
-
 set -euo pipefail
 
-usage() {
-  cat <<'EOF'
-Launch InfiniTrain on multiple nodes from one control node.
+original_argv=("$@")
 
-Usage:
-  scripts/multinode_ssh/launch_multinode_ssh.sh [launcher options] -- TRAIN_PROGRAM [ARGS...]
+usage() { sed -n '2,38p' "$0" | sed 's/^# //'; }
+# Launch InfiniTrain on multiple nodes from one control node.
+# Usage: launch_multinode_ssh.sh [options] -- TRAIN_PROGRAM [ARGS...]
+#   --hosts HOSTS | --hostfile PATH
+#   --workdir PATH                 Repository path on every node.
+#   --nproc-per-node N             Default: 1.
+#   --master-addr HOST             Default: first host.
+#   --master-port PORT             Default: 29500.
+#   --rdzv-id ID                   Default: generated unique ID.
+#   --rdzv-timeout SEC             Default: 120.
+#   --job-timeout SEC              Default: 0 (disabled).
+#   --infini-run PATH              Default: ./build/infini_run.
+#   --ssh-user USER --ssh-port PORT
+#   --ssh-option OPTION            Repeatable; host checking remains enabled.
+#   --local-host HOST              Execute matching host locally.
+#   --remote-docker-container NAME
+#   --log-root PATH                Default: ./logs.
+#   --remote-log-root PATH         Default: WORKDIR/logs.
+#   --env NAME=VALUE               Repeatable.
+#   --check-path PATH              Repeatable readable data/weight check.
+#   --skip-gpu-check               For CPU/simulated tests.
+#   --follow-output                 Stream the last global rank stderr.
+#   --dry-run
 
-Launcher options:
-  --hosts HOSTS              Comma-separated hosts in node-rank order.
-  --hostfile PATH            One host per line; blank lines and # comments ignored.
-  --workdir PATH             Repository path on every node (default: current directory).
-  --nproc-per-node N         Processes started by infini_run on each node (default: 1).
-  --master-addr HOST         Rendezvous address (default: first host).
-  --master-port PORT         Rendezvous port (default: 29500).
-  --rdzv-id ID               Shared job ID (default: generated).
-  --infini-run PATH          infini_run path relative to workdir (default: ./build/infini_run).
-  --ssh-user USER            SSH user for remote nodes.
-  --ssh-port PORT            SSH port (default: 22).
-  --remote-docker-container NAME
-                             Run remote commands through docker exec NAME.
-  --ssh-option OPTION        Additional ssh option; may be repeated.
-  --log-dir PATH             Per-node log directory (default: ./logs/<rdzv-id>).
-  --local-host HOST          Host entry to execute locally instead of through SSH.
-  --node-start-delay SEC     Seconds to wait between starting adjacent nodes (default: 0).
-  --env NAME=VALUE           Export an environment variable on every node; may be repeated.
-  --dry-run                  Print commands without starting them.
-  -h, --help                 Show this help.
+die() { echo "error: $*" >&2; exit 2; }
+quote_command() { local result= arg; for arg in "$@"; do printf -v arg '%q' "$arg"; result+="${result:+ }$arg"; done; printf '%s' "$result"; }
 
-Example:
-  scripts/multinode_ssh/launch_multinode_ssh.sh \
-    --hosts 192.168.162.62,192.168.162.63 \
-    --local-host 192.168.162.62 \
-    --workdir "$HOME/code/InfiniTrain" \
-    --nproc-per-node 4 \
-    --master-addr 192.168.162.62 \
-    --env NCCL_SOCKET_IFNAME=ens22f0 \
-    --env NCCL_IB_DISABLE=1 \
-    -- ./build/gpt2 --device cuda --tensor_parallel 2 --pipeline_parallel 2
-EOF
-}
-
-die() {
-  echo "error: $*" >&2
-  exit 2
-}
-
-quote_command() {
-  local quoted=()
-  local arg
-  for arg in "$@"; do
-    printf -v arg '%q' "$arg"
-    quoted+=("$arg")
-  done
-  local IFS=' '
-  printf '%s' "${quoted[*]}"
-}
-
-hosts_csv=""
-hostfile=""
-workdir="$PWD"
-nproc_per_node=1
-master_addr=""
-master_port=29500
-rdzv_id=""
-infini_run="./build/infini_run"
-ssh_user=""
-ssh_port=22
-remote_docker_container=""
-log_dir=""
-local_host=""
-node_start_delay=0
-dry_run=0
-declare -a ssh_options=()
-declare -a exports=()
-
+hosts_csv= hostfile= workdir=$PWD nproc=1 master_addr= master_port=29500
+rdzv_id= rdzv_timeout=120 job_timeout=0 infini_run=./build/infini_run
+ssh_user= ssh_port=22 container= local_host= log_root="$PWD/logs" remote_log_root=
+dry_run=0 skip_gpu=0 follow_output=0
+declare -a ssh_options=() exports=() check_paths=()
 while (($#)); do
   case "$1" in
-    --hosts) [[ $# -ge 2 ]] || die "--hosts requires a value"; hosts_csv=$2; shift 2 ;;
-    --hostfile) [[ $# -ge 2 ]] || die "--hostfile requires a value"; hostfile=$2; shift 2 ;;
-    --workdir) [[ $# -ge 2 ]] || die "--workdir requires a value"; workdir=$2; shift 2 ;;
-    --nproc-per-node) [[ $# -ge 2 ]] || die "--nproc-per-node requires a value"; nproc_per_node=$2; shift 2 ;;
-    --master-addr) [[ $# -ge 2 ]] || die "--master-addr requires a value"; master_addr=$2; shift 2 ;;
-    --master-port) [[ $# -ge 2 ]] || die "--master-port requires a value"; master_port=$2; shift 2 ;;
-    --rdzv-id) [[ $# -ge 2 ]] || die "--rdzv-id requires a value"; rdzv_id=$2; shift 2 ;;
-    --infini-run) [[ $# -ge 2 ]] || die "--infini-run requires a value"; infini_run=$2; shift 2 ;;
-    --ssh-user) [[ $# -ge 2 ]] || die "--ssh-user requires a value"; ssh_user=$2; shift 2 ;;
-    --ssh-port) [[ $# -ge 2 ]] || die "--ssh-port requires a value"; ssh_port=$2; shift 2 ;;
-    --remote-docker-container) [[ $# -ge 2 ]] || die "--remote-docker-container requires a value"; remote_docker_container=$2; shift 2 ;;
-    --ssh-option) [[ $# -ge 2 ]] || die "--ssh-option requires a value"; ssh_options+=("$2"); shift 2 ;;
-    --log-dir) [[ $# -ge 2 ]] || die "--log-dir requires a value"; log_dir=$2; shift 2 ;;
-    --local-host) [[ $# -ge 2 ]] || die "--local-host requires a value"; local_host=$2; shift 2 ;;
-    --node-start-delay) [[ $# -ge 2 ]] || die "--node-start-delay requires a value"; node_start_delay=$2; shift 2 ;;
-    --env) [[ $# -ge 2 ]] || die "--env requires NAME=VALUE"; exports+=("$2"); shift 2 ;;
-    --dry-run) dry_run=1; shift ;;
-    -h|--help) usage; exit 0 ;;
-    --) shift; break ;;
-    *) die "unknown launcher option: $1" ;;
+    --hosts) hosts_csv=${2:?}; shift 2;; --hostfile) hostfile=${2:?}; shift 2;;
+    --workdir) workdir=${2:?}; shift 2;; --nproc-per-node) nproc=${2:?}; shift 2;;
+    --master-addr) master_addr=${2:?}; shift 2;; --master-port) master_port=${2:?}; shift 2;;
+    --rdzv-id) rdzv_id=${2:?}; shift 2;; --rdzv-timeout) rdzv_timeout=${2:?}; shift 2;;
+    --job-timeout) job_timeout=${2:?}; shift 2;; --infini-run) infini_run=${2:?}; shift 2;;
+    --ssh-user) ssh_user=${2:?}; shift 2;; --ssh-port) ssh_port=${2:?}; shift 2;;
+    --ssh-option) ssh_options+=("${2:?}"); shift 2;;
+    --remote-docker-container) container=${2:?}; shift 2;; --local-host) local_host=${2:?}; shift 2;;
+    --log-root) log_root=${2:?}; shift 2;; --remote-log-root) remote_log_root=${2:?}; shift 2;;
+    --env) exports+=("${2:?}"); shift 2;; --check-path) check_paths+=("${2:?}"); shift 2;; --skip-gpu-check) skip_gpu=1; shift;;
+    --follow-output) follow_output=1; shift;; --dry-run) dry_run=1; shift;; -h|--help) usage; exit 0;; --) shift; break;;
+    *) die "unknown launcher option: $1";;
   esac
 done
-
 [[ $# -gt 0 ]] || die "missing training program after --"
 [[ -z $hosts_csv || -z $hostfile ]] || die "use only one of --hosts and --hostfile"
 [[ -n $hosts_csv || -n $hostfile ]] || die "--hosts or --hostfile is required"
-[[ $nproc_per_node =~ ^[1-9][0-9]*$ ]] || die "--nproc-per-node must be positive"
-[[ $master_port =~ ^[1-9][0-9]*$ ]] || die "--master-port must be positive"
-[[ $ssh_port =~ ^[1-9][0-9]*$ ]] || die "--ssh-port must be positive"
-[[ $node_start_delay =~ ^[0-9]+([.][0-9]+)?$ ]] || die "--node-start-delay must be non-negative"
+for value in "$nproc" "$master_port" "$ssh_port" "$rdzv_timeout"; do [[ $value =~ ^[1-9][0-9]*$ ]] || die "positive integer required: $value"; done
+[[ $job_timeout =~ ^[0-9]+$ ]] || die "--job-timeout must be non-negative"
+for entry in "${exports[@]}"; do [[ $entry == [A-Za-z_]*=* ]] || die "invalid --env: $entry"; done
 
 declare -a hosts=()
-if [[ -n $hosts_csv ]]; then
-  IFS=',' read -r -a hosts <<<"$hosts_csv"
-else
+if [[ -n $hosts_csv ]]; then IFS=',' read -r -a hosts <<<"$hosts_csv"; else
   [[ -r $hostfile ]] || die "cannot read hostfile: $hostfile"
-  while IFS= read -r line || [[ -n $line ]]; do
-    line=${line%%#*}
-    read -r line <<<"$line"
-    [[ -n $line ]] && hosts+=("$line")
-  done <"$hostfile"
+  while IFS= read -r line || [[ -n $line ]]; do line=${line%%#*}; read -r line <<<"$line"; [[ -n $line ]] && hosts+=("$line"); done <"$hostfile"
 fi
 [[ ${#hosts[@]} -gt 0 ]] || die "host list is empty"
-
-for entry in "${exports[@]}"; do
-  [[ $entry == *=* && $entry != =* ]] || die "invalid --env value: $entry"
-done
-
+declare -A seen=(); for host in "${hosts[@]}"; do [[ -n $host ]] || die "empty host"; [[ -z ${seen[$host]:-} ]] || die "duplicate host: $host"; seen[$host]=1; done
 master_addr=${master_addr:-${hosts[0]}}
-rdzv_id=${rdzv_id:-"infinitrain-$(date +%Y%m%d-%H%M%S)-$$"}
-log_dir=${log_dir:-"$PWD/logs/$rdzv_id"}
-mkdir -p "$log_dir"
+rdzv_id=${rdzv_id:-"infinitrain-$(date -u +%Y%m%dT%H%M%SZ)-$$-$RANDOM"}
+[[ $rdzv_id =~ ^[A-Za-z0-9_.-]+$ ]] || die "rdzv-id may contain only letters, digits, dot, underscore, dash"
+remote_log_root=${remote_log_root:-"$workdir/logs"}
+job_dir="$log_root/$rdzv_id"; mkdir -p "$job_dir"
+train=("$@"); nnodes=${#hosts[@]}; expected_sha= reference_fingerprint=
+if [[ -d $workdir/.git ]]; then expected_sha=$(git -c safe.directory="$workdir" -C "$workdir" rev-parse HEAD 2>/dev/null || true); fi
 
-train_command=("$@")
-nnodes=${#hosts[@]}
-declare -a child_pids=()
-declare -a child_nodes=()
-stopping=0
-
-stop_children() {
-  ((stopping == 0)) || return
-  stopping=1
-  local pid
-  for pid in "${child_pids[@]:-}"; do
-    kill -TERM -- "-$pid" 2>/dev/null || true
-  done
-}
-trap 'stop_children; exit 130' INT TERM
-
-for node_rank in "${!hosts[@]}"; do
-  host=${hosts[$node_rank]}
-  node_command=(
-    "$infini_run"
-    "--nnodes=$nnodes"
-    "--nproc_per_node=$nproc_per_node"
-    "--node_rank=$node_rank"
-    "--rdzv_endpoint=$master_addr:$master_port"
-    "--rdzv_id=$rdzv_id"
-    "${train_command[@]}"
-  )
-
-  printf -v quoted_workdir '%q' "$workdir"
-  command_text="cd $quoted_workdir && "
-  for entry in "${exports[@]}"; do
-    printf -v quoted_export '%q' "$entry"
-    command_text+="export $quoted_export; "
-  done
-  command_text+="exec $(quote_command "${node_command[@]}")"
-
-  log_file="$log_dir/node-${node_rank}-${host//[^a-zA-Z0-9_.-]/_}.log"
-  if [[ -n $local_host && $host == "$local_host" ]]; then
-    launch=(bash -lc "$command_text")
+ssh_base=(ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$ssh_port")
+for option in "${ssh_options[@]}"; do ssh_base+=(-o "$option"); done
+node_shell() {
+  local host=$1 command=$2 destination=$host
+  if [[ -n $local_host && $host == "$local_host" ]]; then bash -c "$command"
   else
-    destination=$host
     [[ -z $ssh_user ]] || destination="$ssh_user@$host"
-    launch=(ssh -o BatchMode=yes -o ConnectTimeout=10 -p "$ssh_port")
-    for option in "${ssh_options[@]}"; do
-      launch+=(-o "$option")
-    done
-    if [[ -n $remote_docker_container ]]; then
-      docker_command=(docker exec "$remote_docker_container" bash -lc "$command_text")
-      launch+=("$destination" "$(quote_command "${docker_command[@]}")")
-    else
-      launch+=("$destination" "$command_text")
-    fi
+    if [[ -n $container ]]; then
+      local wrapped; wrapped=$(quote_command docker exec "$container" bash -c "$command")
+      "${ssh_base[@]}" "$destination" "$wrapped"
+    else "${ssh_base[@]}" "$destination" "$command"; fi
   fi
+}
 
-  launch=(setsid "${launch[@]}")
-
-  printf '[node %d %s] ' "$node_rank" "$host"
-  quote_command "${launch[@]}"
-  printf ' > %q 2>&1\n' "$log_file"
-  if ((dry_run)); then
-    continue
+follow_node_shell() {
+  local host=$1 command=$2 destination=$host
+  if [[ -n $local_host && $host == "$local_host" ]]; then
+    exec bash -c "$command"
   fi
-
-  "${launch[@]}" >"$log_file" 2>&1 &
-  child_pids+=("$!")
-  child_nodes+=("$host")
-
-  if ((node_rank + 1 < nnodes)) && [[ $node_start_delay != 0 ]]; then
-    sleep "$node_start_delay"
+  [[ -z $ssh_user ]] || destination="$ssh_user@$host"
+  if [[ -n $container ]]; then
+    local wrapped
+    wrapped=$(quote_command docker exec "$container" bash -c "$command")
+    exec "${ssh_base[@]}" "$destination" "$wrapped"
   fi
+  exec "${ssh_base[@]}" "$destination" "$command"
+}
+
+remote_job_dir="$remote_log_root/$rdzv_id"
+code_sha=${expected_sha:-unknown}
+code_dirty=unknown
+if [[ -d $workdir/.git ]]; then
+  if [[ -z $(git -c safe.directory="$workdir" -C "$workdir" status --porcelain --untracked-files=normal 2>/dev/null) ]]; then code_dirty=false; else code_dirty=true; fi
+fi
+printf 'job_id=%s\ncode_sha=%s\ncode_dirty=%s\nbase_sha=%s\nmaster_sha=%s\nstart_utc=%s\ncontroller=%s\nmaster=%s:%s\nnnodes=%d\nnproc_per_node=%d\n' \
+  "$rdzv_id" "$code_sha" "$code_dirty" "924d21256f3baf66bccb7458aa77395f0fbf5841" \
+  "5a7be78e9b9d42c2f26efe33984dd3167dc60dc9" "$(date -u +%FT%TZ)" "$(hostname)" \
+  "$master_addr" "$master_port" "$nnodes" "$nproc" >"$job_dir/metadata.txt"
+printf '%q ' "$0" "${original_argv[@]}" >"$job_dir/controller-command.txt"
+printf '\n' >>"$job_dir/controller-command.txt"
+
+for rank in "${!hosts[@]}"; do
+  host=${hosts[$rank]}
+  printf -v preflight 'set -e; cd %q; test -x %q; test -x %q; command -v git >/dev/null; command -v sha256sum >/dev/null; printf "hostname=%%s\nsha=%%s\ninfini_run_sha256=%%s\ntrain_sha256=%%s\n" "$(hostname)" "$(git -c safe.directory=%q rev-parse HEAD)" "$(sha256sum %q)" "$(sha256sum %q)"' "$workdir" "$infini_run" "${train[0]}" "$workdir" "$infini_run" "${train[0]}"
+  for path in "${check_paths[@]}"; do printf -v qpath "%q" "$path"; preflight+="; test -r $qpath"; done
+  preflight+="; { command -v nvcc >/dev/null && nvcc --version || true; }; { command -v ldconfig >/dev/null && ldconfig -p 2>/dev/null | grep -i nccl || true; }"
+  if ((skip_gpu == 0)); then preflight+="; command -v nvidia-smi >/dev/null; nvidia-smi --query-gpu=index,name,driver_version,memory.total --format=csv,noheader; nvidia-smi --query-gpu=index --format=csv,noheader | awk 'END { exit(NR < $nproc) }'"; fi
+  if ((dry_run)); then echo "$preflight"; continue; fi
+  if ! node_shell "$host" "$preflight" >"$job_dir/preflight-$rank.log" 2>&1; then
+    echo "FAILED preflight node=$rank host=$host log=$job_dir/preflight-$rank.log" >&2; exit 1
+  fi
+  node_sha=$(sed -n 's/^sha=//p' "$job_dir/preflight-$rank.log" | head -1)
+  [[ -z $expected_sha || $node_sha == "$expected_sha" ]] || die "code SHA mismatch on $host: $node_sha != $expected_sha"
+  fingerprint=$(sed -n '/^infini_run_sha256=/p; /^train_sha256=/p' "$job_dir/preflight-$rank.log")
+  if [[ -z $reference_fingerprint ]]; then reference_fingerprint=$fingerprint; else [[ $fingerprint == "$reference_fingerprint" ]] || die "binary SHA-256 mismatch on $host"; fi
 done
+declare -a pids=() node_for_pid=()
+follow_pid=
 
+stopping=0
+cleanup_nodes() {
+  ((stopping == 0)) || return; stopping=1
+  local -a cleanup_pids=()
+  for rank in "${!hosts[@]}"; do
+    host=${hosts[$rank]}; printf -v qdir '%q' "$remote_job_dir"; printf -v qid '%q' "$rdzv_id"
+    cleanup=$(quote_command bash -c 'p=$1; id=$2; if test -r "$p"; then pid=$(cat "$p"); case "$pid" in ""|*[!0-9]*) exit 0;; esac; if test -r /proc/$pid/cmdline && tr "\0" " " </proc/$pid/cmdline | grep -F -- "$id" >/dev/null; then kill -TERM -- -$pid 2>/dev/null || true; sleep 1; kill -KILL -- -$pid 2>/dev/null || true; fi; fi' _ "$remote_job_dir/node-$rank/launcher.pid" "$rdzv_id")
+    node_shell "$host" "$cleanup" >/dev/null 2>&1 & cleanup_pids+=("$!")
+  done
+  for pid in "${cleanup_pids[@]}"; do wait "$pid" 2>/dev/null || true; done
+}
+stop_follower() { if [[ -n ${follow_pid:-} ]]; then kill "$follow_pid" 2>/dev/null || true; wait "$follow_pid" 2>/dev/null || true; follow_pid=; fi; }
+watchdog_pid=
+abort_job() { local rc=$1 reason=$2; cleanup_nodes; stop_follower; printf 'end_utc=%s\nexit_code=%d\nfirst_error=%s\n' "$(date -u +%FT%TZ)" "$rc" "$reason" >>"$job_dir/metadata.txt"; echo "FAILED job=$rdzv_id exit=$rc error=$reason logs=$job_dir remote_logs=$remote_job_dir" >&2; exit "$rc"; }
+if ((job_timeout > 0)); then (sleep "$job_timeout"; kill -USR1 $$) & watchdog_pid=$!; fi
+trap 'abort_job 124 "job timeout after ${job_timeout}s"' USR1
+trap 'abort_job 130 "controller interrupted"' INT TERM
+
+for rank in "${!hosts[@]}"; do
+  host=${hosts[$rank]}; node_log_dir="$remote_job_dir/node-$rank"
+  node_cmd=("$infini_run" "--nnodes=$nnodes" "--nproc_per_node=$nproc" "--node_rank=$rank"
+    "--rdzv_endpoint=$master_addr:$master_port" "--rdzv_id=$rdzv_id" "--rdzv_timeout=$rdzv_timeout"
+    "--log_dir=$node_log_dir" "${train[@]}")
+  printf -v qwork '%q' "$workdir"; printf -v qdir '%q' "$remote_job_dir"
+  command="set -e; mkdir -p $qdir/node-$rank; cd $qwork; "
+  for entry in "${exports[@]}"; do printf -v qentry '%q' "$entry"; command+="export $qentry; "; done
+  command+="setsid $(quote_command "${node_cmd[@]}") & pid=\$!; echo \$pid >$qdir/node-$rank/launcher.pid; trap 'kill -TERM -- -\$pid 2>/dev/null || true' INT TERM HUP EXIT; wait \$pid"
+  echo "launch node=$rank host=$host log=$job_dir/node-$rank-controller.log"
+  if ((dry_run)); then echo "$command"; continue; fi
+  node_shell "$host" "$command" >"$job_dir/node-$rank-controller.log" 2>&1 &
+  pids+=("$!"); node_for_pid+=("$rank:$host")
+done
+if ((follow_output && !dry_run)); then
+  follow_node_rank=$((nnodes - 1)); follow_rank=$((nnodes * nproc - 1)); follow_host=${hosts[$follow_node_rank]}
+  follow_file="$remote_job_dir/node-$follow_node_rank/rank-$follow_rank.stderr.log"
+  printf -v qfollow '%q' "$follow_file"
+  follow_command="while ! test -f $qfollow; do sleep 0.2; done; exec tail -s 0.1 -n +1 -F $qfollow"
+  echo "follow global_rank=$follow_rank host=$follow_host file=$follow_file"
+  follow_node_shell "$follow_host" "$follow_command" & follow_pid=$!
+fi
 ((dry_run)) && exit 0
 
-status=0
-declare -A node_by_pid=()
-declare -A running_pids=()
-for index in "${!child_pids[@]}"; do
-  pid=${child_pids[$index]}
-  node_by_pid[$pid]=${child_nodes[$index]}
-  running_pids[$pid]=1
+status=0 first_error= deadline=0
+((job_timeout > 0)) && deadline=$((SECONDS + job_timeout))
+declare -A running=(); for i in "${!pids[@]}"; do running[${pids[$i]}]=${node_for_pid[$i]}; done
+while ((${#running[@]})); do
+  if ((deadline > 0 && SECONDS >= deadline)); then status=124; first_error="job timeout after ${job_timeout}s"; cleanup_nodes; break; fi
+  finished=; if wait -n -p finished; then rc=0; else rc=$?; fi
+  [[ -n ${finished:-} ]] || { sleep 1; continue; }
+  node=${running[$finished]}; unset 'running[$finished]'
+  if ((rc != 0)); then status=$rc; first_error="node $node exited with status $rc"; cleanup_nodes; break; fi
 done
-
-while ((${#running_pids[@]} > 0)); do
-  finished_pid=""
-  if wait -n -p finished_pid; then
-    rc=0
-  else
-    rc=$?
-  fi
-  [[ -n ${finished_pid:-} ]] || die "failed to identify completed node launcher"
-  unset 'running_pids[$finished_pid]'
-  if ((rc != 0)); then
-    echo "node ${node_by_pid[$finished_pid]} failed (launcher status $rc)" >&2
-    status=1
-    stop_children
-    for pid in "${!running_pids[@]}"; do
-      wait "$pid" 2>/dev/null || true
-    done
-    break
-  fi
-done
-
-trap - INT TERM
+if ((follow_output)); then sleep 0.3; fi
+stop_follower
+for pid in "${!running[@]}"; do wait "$pid" 2>/dev/null || true; done
+[[ -z $watchdog_pid ]] || kill "$watchdog_pid" 2>/dev/null || true
+trap - INT TERM USR1
+printf 'end_utc=%s\nexit_code=%d\nfirst_error=%s\n' "$(date -u +%FT%TZ)" "$status" "$first_error" >>"$job_dir/metadata.txt"
+if ((status == 0)); then echo "SUCCESS job=$rdzv_id logs=$job_dir remote_logs=$remote_job_dir"; else echo "FAILED job=$rdzv_id exit=$status error=$first_error logs=$job_dir remote_logs=$remote_job_dir" >&2; fi
 exit "$status"
