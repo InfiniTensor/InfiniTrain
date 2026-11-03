@@ -1124,7 +1124,15 @@
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8,
-                        "sequence_parallel": true
+                        "sequence_parallel": true,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": true,
+                        "tp_comm_bulk_wgrad": true,
+                        "tp_comm_overlap_ag": false,
+                        "tp_comm_overlap_rs": false,
+                        "tp_comm_overlap_rs_dgrad": false,
+                        "tp_comm_overlap_disable_qkv": false,
+                        "tp_comm_overlap_disable_fc1": false
                     }
                 },
                 {
@@ -1164,7 +1172,15 @@
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2
+                        "virtual_pipeline_parallel": 2,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": false,
+                        "tp_comm_bulk_wgrad": false,
+                        "tp_comm_overlap_ag": true,
+                        "tp_comm_overlap_rs": true,
+                        "tp_comm_overlap_rs_dgrad": false,
+                        "tp_comm_overlap_disable_qkv": false,
+                        "tp_comm_overlap_disable_fc1": false
                     }
                 },
                 {
@@ -1178,7 +1194,15 @@
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2
+                        "virtual_pipeline_parallel": 2,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": true,
+                        "tp_comm_bulk_wgrad": true,
+                        "tp_comm_overlap_ag": true,
+                        "tp_comm_overlap_rs": true,
+                        "tp_comm_overlap_rs_dgrad": true,
+                        "tp_comm_overlap_disable_qkv": false,
+                        "tp_comm_overlap_disable_fc1": false
                     }
                 }
             ]
@@ -1220,7 +1244,15 @@
                         "batch_size": 1,
                         "total_batch_size": 64,
                         "tensor_parallel": 8,
-                        "sequence_parallel": true
+                        "sequence_parallel": true,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": false,
+                        "tp_comm_bulk_wgrad": false,
+                        "tp_comm_overlap_ag": false,
+                        "tp_comm_overlap_rs": false,
+                        "tp_comm_overlap_rs_dgrad": true,
+                        "tp_comm_overlap_disable_qkv": false,
+                        "tp_comm_overlap_disable_fc1": false
                     }
                 },
                 {
@@ -1260,7 +1292,15 @@
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2
+                        "virtual_pipeline_parallel": 2,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": true,
+                        "tp_comm_bulk_wgrad": false,
+                        "tp_comm_overlap_ag": true,
+                        "tp_comm_overlap_rs": false,
+                        "tp_comm_overlap_rs_dgrad": true,
+                        "tp_comm_overlap_disable_qkv": true,
+                        "tp_comm_overlap_disable_fc1": false
                     }
                 },
                 {
@@ -1274,7 +1314,15 @@
                         "tensor_parallel": 2,
                         "sequence_parallel": true,
                         "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2
+                        "virtual_pipeline_parallel": 2,
+                        "tp_comm_overlap": true,
+                        "tp_comm_bulk_dgrad": false,
+                        "tp_comm_bulk_wgrad": true,
+                        "tp_comm_overlap_ag": true,
+                        "tp_comm_overlap_rs": true,
+                        "tp_comm_overlap_rs_dgrad": true,
+                        "tp_comm_overlap_disable_qkv": false,
+                        "tp_comm_overlap_disable_fc1": true
                     }
                 }
             ]
