@@ -139,7 +139,6 @@ class ProcessGroup {
 
   const std::string name_ = "";
 
-  bool is_main_process_ = false;
   Device::DeviceType backend_ = Device::DeviceType::kInvalid;
 
   // Save impl for convenience

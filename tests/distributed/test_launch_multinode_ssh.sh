@@ -2,8 +2,8 @@
 set -euo pipefail
 
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-launcher="$script_dir/launch_multinode_ssh.sh"
 repo=$(cd "$script_dir/../.." && pwd)
+launcher="$repo/scripts/multinode_ssh/launch_multinode_ssh.sh"
 tmp=$(mktemp -d)
 trap 'rm -rf "$tmp"' EXIT
 
