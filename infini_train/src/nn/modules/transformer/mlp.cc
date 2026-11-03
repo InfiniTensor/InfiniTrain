@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/modules/transformer/moe/moe_utils.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 
 namespace infini_train::nn {
@@ -45,7 +46,8 @@ MLP::MLP(const TransformerConfig &config, bool is_expert)
       /*input_is_parallel=*/false,
       /*skip_bias_add=*/false,
       /*sequence_parallel=*/parallel::global::GetSequenceParallelEnabled(),
-      /*tp_comm_buffer_name=*/"fc1");
+      /*disable_tp_comm_pipeline=*/
+      parallel::global::GetModelParallelConfig().tp_comm_overlap_disable_fc1);
 
   // Activation: check for GELU or SwiGLU
   if (config.activation_type == MLPType::kGELU) {
