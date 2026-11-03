@@ -3,7 +3,6 @@
 #include <stdint.h>
 
 #include <memory>
-#include <string>
 #include <vector>
 
 #include "infini_train/include/autograd/function.h"
@@ -49,7 +48,7 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
   ColumnParallelLinear(int64_t in_features, int64_t out_features, bool bias,
                        bool gather_output, bool input_is_parallel,
                        bool skip_bias_add, bool sequence_parallel = false,
-                       const std::string &tp_comm_buffer_name = "");
+                       bool disable_tp_comm_pipeline = false);
 
   std::vector<std::shared_ptr<Tensor>> Forward(
       const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
@@ -60,7 +59,7 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
   bool input_is_parallel() const;
   bool skip_bias_add() const;
   bool sequence_parallel() const;
-  const std::string &tp_comm_buffer_name() const;
+  bool disable_tp_comm_pipeline() const;
 
   ShardedStateDict BuildShardedStateDict(
       const ShardedStateDictBuildContext &context) const override;
@@ -75,7 +74,9 @@ class ColumnParallelLinear : public nn::CloneableModule<ColumnParallelLinear> {
       false;  // will return {out, bias} if true (for fusion purpose)
   bool sequence_parallel_ = false;  // whether to enable sequence parallel
 
-  std::string tp_comm_buffer_name_;  // "qkv" / "fc1" select overlap overrides.
+  // Disable forward AG and split dgrad RS pipelines; bulk overlap still
+  // applies.
+  bool disable_tp_comm_pipeline_ = false;
   int64_t output_size_per_partition_ = 0;
 };
 

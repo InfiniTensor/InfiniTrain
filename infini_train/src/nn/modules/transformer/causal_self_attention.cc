@@ -19,6 +19,7 @@
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/tensor.h"
 
@@ -55,7 +56,9 @@ CausalSelfAttention::CausalSelfAttention(const TransformerConfig &config)
       /*input_is_parallel=*/false,
       /*skip_bias_add=*/false,
       /*sequence_parallel=*/nn::parallel::global::GetSequenceParallelEnabled(),
-      /*tp_comm_buffer_name=*/"qkv");
+      /*disable_tp_comm_pipeline=*/
+      nn::parallel::global::GetModelParallelConfig()
+          .tp_comm_overlap_disable_qkv);
 
   // proj: RowParallel (input is parallel and output is full)
   modules_[kCProjLayerName] = std::make_shared<nn::parallel::RowParallelLinear>(

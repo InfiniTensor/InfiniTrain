@@ -576,14 +576,14 @@ std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(
 ColumnParallelLinear::ColumnParallelLinear(
     int64_t in_features, int64_t out_features, bool bias, bool gather_output,
     bool input_is_parallel, bool skip_bias_add, bool sequence_parallel,
-    const std::string &tp_comm_buffer_name)
+    bool disable_tp_comm_pipeline)
     : CloneableModule(kType),
       bias_(bias),
       gather_output_(gather_output),
       input_is_parallel_(input_is_parallel),
       skip_bias_add_(skip_bias_add),
       sequence_parallel_(sequence_parallel),
-      tp_comm_buffer_name_(tp_comm_buffer_name) {
+      disable_tp_comm_pipeline_(disable_tp_comm_pipeline) {
   auto tp_size = global::GetTensorParallelSize();
   CHECK_GT(tp_size, 0) << "No available devices found";
   CHECK_EQ(out_features % tp_size, 0)
@@ -627,15 +627,11 @@ std::vector<std::shared_ptr<Tensor>> ColumnParallelLinear::Forward(
   }
   std::shared_ptr<Tensor> sharded_output;
   if (sequence_parallel_ && global::GetTensorParallelSize() > 1) {
-    const auto &config = global::GetModelParallelConfig();
     const auto *tp_group = GetTPGroup(input->GetDevice());
-    const bool disable_pipeline =
-        (tp_comm_buffer_name_ == "qkv" && config.tp_comm_overlap_disable_qkv) ||
-        (tp_comm_buffer_name_ == "fc1" && config.tp_comm_overlap_disable_fc1);
     sharded_output =
         std::make_shared<LinearWithGradAccumulationAndAsyncCommunication>(
-            bias != nullptr, /*column_parallel=*/true, disable_pipeline,
-            tp_group)
+            bias != nullptr, /*column_parallel=*/true,
+            disable_tp_comm_pipeline_, tp_group)
             ->Apply(linear_inputs)[0];
   } else {
     sharded_output =
@@ -709,8 +705,8 @@ ShardedStateDict ColumnParallelLinear::BuildShardedStateDict(
   return sd;
 }
 
-const std::string &ColumnParallelLinear::tp_comm_buffer_name() const {
-  return tp_comm_buffer_name_;
+bool ColumnParallelLinear::disable_tp_comm_pipeline() const {
+  return disable_tp_comm_pipeline_;
 }
 
 RowParallelLinear::RowParallelLinear(int64_t in_features, int64_t out_features,
