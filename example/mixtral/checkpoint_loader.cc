@@ -193,10 +193,10 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(
   CHECK_EQ(moe_config.num_experts % expert_parallel_size, 0);
   const int64_t num_local_experts =
       moe_config.num_experts / expert_parallel_size;
-  int dp, tp, pp, expert_parallel_rank;
+  int dp, tp, pp, cp, expert_parallel_rank;
   infini_train::nn::parallel::global::GetExpertRankGenerator().CoordOf(
       infini_train::nn::parallel::global::thread_global_rank, dp, tp, pp,
-      expert_parallel_rank);
+      expert_parallel_rank, cp);
   const int64_t first_local_expert = expert_parallel_rank * num_local_experts;
   const int64_t last_local_expert = first_local_expert + num_local_experts;
 

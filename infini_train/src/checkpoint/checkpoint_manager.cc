@@ -122,6 +122,7 @@ void SaveCheckpoint(const SaveCheckpointArgs &args) {
                      .ddp_size = args.ddp_size,
                      .tp_size = args.tp_size,
                      .sp_size = args.sp_size,
+                     .cp_size = args.cp_size,
                      .pp_size = args.pp_size,
                      .vpp_size = args.vpp_size};
   const auto iteration_dir =
