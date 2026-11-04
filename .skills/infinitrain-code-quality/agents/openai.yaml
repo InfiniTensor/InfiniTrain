@@ -1,0 +1,3 @@
+interface:
+  display_name: "InfiniTrain Code Quality"
+  short_description: "Run and fix InfiniTrain formatting, clang-tidy and IWYU checks"
