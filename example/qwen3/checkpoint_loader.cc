@@ -41,7 +41,8 @@ namespace qwen3 {
 
 std::shared_ptr<nn::TransformerModel> LoadFromLLMC(
     const std::string &filepath,
-    const nn::ActivationRecomputeOptions &recompute_options) {
+    const nn::ActivationRecomputeOptions &recompute_options,
+    bool use_flash_attention) {
   if (!std::filesystem::exists(filepath)) {
     LOG(FATAL) << "File not found: " << filepath;
   }
@@ -125,6 +126,7 @@ std::shared_ptr<nn::TransformerModel> LoadFromLLMC(
   qwen3_config.norm_eps = norm_eps;
   qwen3_config.max_gen_batch_size = max_gen_bs;
   qwen3_config.qk_layernorm = true;
+  qwen3_config.flash = use_flash_attention;
   qwen3::SanitizeQwen3Config(qwen3_config);
   nn::ApplyActivationRecomputeOptions(&qwen3_config, recompute_options);
   auto qwen3 = std::make_shared<nn::TransformerModel>(qwen3_config);
