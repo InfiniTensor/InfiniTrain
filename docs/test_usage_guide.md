@@ -1,6 +1,37 @@
 # 测试使用指南
 
-本指南介绍如何在 InfiniTrain 中构建、运行和编写测试。底层设计详见 [test_infrastructure_design.md](test_infrastructure_design.md) 和 [test_lifecycle.md](test_lifecycle.md)。
+本指南介绍如何构建、运行和编写测试。底层单元测试设计见 [test_infrastructure_design.md](test_infrastructure_design.md)。
+
+## 一键训练回归
+
+默认与上一次成功运行的原始日志进行 loss 和吞吐比较，保留配置矩阵与五类套件：
+
+```bash
+./scripts/run_all_tests.sh                         # PR：87 个 GPU 训练任务及单元测试
+./scripts/run_all_tests.sh --suite smoke            # 四个小模型
+./scripts/run_all_models.sh                        # nightly：299 个任务，含 212 个经典任务
+./scripts/run_all_tests.sh --suite perf             # 14项基础/DDP算子profiling，独立PROFILE_MODE=ON构建
+./scripts/run_all_tests.sh --suite release          # 303项普通构建回归及长程训练
+
+./scripts/run_all_tests.sh --list
+./scripts/run_all_tests.sh --model llama3 --tag zero2
+./scripts/run_all_tests.sh --tag recompute          # 三模型小规模重计算
+./scripts/run_all_tests.sh --suite nightly --tag classic --tag recompute --model qwen3
+./scripts/run_all_tests.sh --reference-run artifacts/test-runs/OLD_RUN_ID
+./scripts/run_all_tests.sh --rerun-failed artifacts/test-runs/RUN_ID/summary.json
+```
+
+首次没有历史时标记 `RECORDED`，保存本次记录；之后按相同 case 的训练参数、资产和步数匹配。FP32/BF16 loss 默认绝对误差分别为 `1e-5`/`1e-2`；性能比较排除首步后的平均 tok/s，默认降速超过 20% 失败。失败运行不会成为下一次参考。`--record-history` 可显式重新记录历史，`--strict` 则要求完整套件且完成实际对齐。
+
+默认不运行额外单卡参考、PyTorch oracle 或完整张量快照。checkpoint 所需的保存/加载依赖仍自动执行。需要专项深度检查时，显式传入 `--alignment deep`；该模式在历史日志比较之外，执行场景声明的数值检查。
+
+每次运行生成 `run.json`、`summary.md`、逐用例 `train.log`、指标及覆盖报告。记录 UTC 时间、完整 commit、dirty 标记、case ID、实际命令和退出码。首轮记录与真正对齐通过会分开显示。
+
+本机的容器、数据、构建、历史及 checkpoint 目录放在 `tests.local.json`。建议大型 checkpoint 使用 `--checkpoint-root /fast-scratch/infinitrain-regression`；成功后只清理本次运行所属 checkpoint，失败现场及日志保留。CPU 仅支持 FP32 合法子集，不能代替 GPU 分布式验证。
+
+普通新增组合在 `tests/regression/scenarios/` 添加 JSON；同接口新模型登记到 `models/`。配置约束见 [配置规范](../tests/regression/schema/README.md)，完整使用说明见 [训练回归指南](../tests/regression/README.md)。
+
+CI 接入将另行提供。本次变更提供本地测试入口；后续计划在 CI 中运行 Python 自测、纯 CPU 构建、CTest 和四模型 smoke，并通过自托管 runner 执行 GPU 套件。CI 的历史目录应保存在 checkout 之外，避免被清理。
 
 ---
 

@@ -8,3 +8,7 @@ build/
 
 __pycache__/
 /data/
+
+# Local training regression environment and generated run artifacts.
+/tests.local.json
+/artifacts/test-runs/

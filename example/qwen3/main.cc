@@ -61,6 +61,7 @@
 #include "infini_train/include/profiler.h"
 #endif
 
+#include "example/common/regression_output.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/qwen3/checkpoint_loader.h"
@@ -69,6 +70,10 @@
 // TODO(jym): Reorganize CLI flags into categories for better readability and
 // maintainability. I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
+DEFINE_string(metrics_file, "",
+              "Optional regression JSONL prefix (one file per rank)");
+DEFINE_string(regression_snapshot_dir, "",
+              "Optional per-step regression tensor snapshot directory");
 DEFINE_string(input_val_bin, "", "input .bin to eval validation loss on");
 DEFINE_string(tokenizer_bin, "", "input .bin to tokenizer");
 // model bin file is downloaded and processed using the script at
@@ -297,7 +302,10 @@ void Train(const nn::parallel::Rank &rank) {
       FLAGS_activation_recompute, FLAGS_recompute_granularity,
       FLAGS_recompute_method, static_cast<int64_t>(FLAGS_recompute_num_layers));
   if (!FLAGS_llmc_filepath.empty()) {
-    model = qwen3::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
+    auto loaded_model =
+        qwen3::LoadFromLLMC(FLAGS_llmc_filepath, recompute_options);
+    model_config = loaded_model->Config();
+    model = loaded_model;
   } else {
     nn::ApplyActivationRecomputeOptions(&model_config, recompute_options);
     qwen3::SanitizeQwen3Config(model_config);
@@ -489,6 +497,12 @@ void Train(const nn::parallel::Rank &rank) {
 
   start_step = resume_result.global_step;
   size_t consumed_train_samples = resume_result.consumed_train_samples;
+  regression::Output regression_output(
+      FLAGS_metrics_file, FLAGS_regression_snapshot_dir, "qwen3", FLAGS_dtype,
+      model_config, rank.GlobalRank(), ddp_world_size, tp_world_size,
+      pp_world_size, sp_world_size, ddp_rank, tp_rank, pp_rank,
+      FLAGS_virtual_pipeline_parallel);
+  regression_output.Snapshot(start_step, model);
 
   auto advance_train_iter = [&]() {
     ++train_iter;
@@ -652,11 +666,21 @@ void Train(const nn::parallel::Rank &rank) {
           static_cast<const float *>(lossf_tensor->To(Device()).DataPtr())[0];
     }
 
+    if (regression_output.enabled()) {
+      impl->SynchronizeDevice(device);
+    }
     const auto iter_end = std::chrono::high_resolution_clock::now();
     const double duration_us =
         std::chrono::duration<double, std::micro>(iter_end - iter_start)
             .count();
     const double tps = FLAGS_total_batch_size / (duration_us / 1e6);
+    if (regression_output.enabled()) {
+      const auto [peak_used, peak_reserved] = impl->GetMemPoolPeakMB(device);
+      regression_output.Step(step + 1, lossf, current_lr,
+                             FLAGS_total_batch_size, duration_us / 1e3,
+                             peak_used, peak_reserved, consumed_train_samples);
+      regression_output.Snapshot(step + 1, model, optimizer.get());
+    }
 
     if (rank.IsLastRank()) {
       size_t used_mb = 0, reserved_mb = 0;
@@ -694,6 +718,8 @@ void Train(const nn::parallel::Rank &rank) {
       }
     }
   }
+
+  regression_output.Complete(FLAGS_num_iteration, consumed_train_samples);
 
   // Save LoRA weights if enabled and path specified
   if (lora_enabled && !FLAGS_lora_save_path.empty()) {

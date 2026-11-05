@@ -1,0 +1,113 @@
+{
+  "schema_version": 1,
+  "id": "mixtral",
+  "binary": "mixtral",
+  "adapter": "mixtral",
+  "backends": [
+    "cpu",
+    "cuda",
+    "privateuseone"
+  ],
+  "dtypes": [
+    "float32",
+    "bfloat16"
+  ],
+  "argument_types": {
+    "input_bin": "string",
+    "metrics_file": "string",
+    "regression_snapshot_dir": "string",
+    "micro_batch_size": "uint32",
+    "global_batch_size": "uint32",
+    "sequence_length": "uint32",
+    "num_iteration": "uint32",
+    "learning_rate": "double",
+    "llmc_filepath": "string",
+    "device": "string",
+    "dtype": "string",
+    "log_interval": "uint32",
+    "print_timing": "bool",
+    "nthread_per_process": "int32",
+    "tensor_parallel": "uint32",
+    "pipeline_parallel": "uint32",
+    "virtual_pipeline_parallel": "uint32",
+    "expert_parallel": "uint32",
+    "expert_tensor_parallel": "uint32",
+    "zero_stage": "int32"
+  },
+  "defaults": {
+    "input_bin": "",
+    "micro_batch_size": 4,
+    "global_batch_size": 4,
+    "sequence_length": 64,
+    "num_iteration": 10,
+    "learning_rate": 0.0001,
+    "llmc_filepath": "",
+    "device": "cpu",
+    "dtype": "float32",
+    "log_interval": 1,
+    "print_timing": false,
+    "nthread_per_process": 1,
+    "tensor_parallel": 1,
+    "pipeline_parallel": 1,
+    "virtual_pipeline_parallel": 1,
+    "expert_parallel": 1,
+    "expert_tensor_parallel": 1,
+    "zero_stage": 0
+  },
+  "capabilities": {
+    "distributed": true,
+    "zero_stages": [
+      0,
+      1,
+      2
+    ],
+    "checkpoint": false,
+    "lora": false
+  },
+  "profiles": {
+    "classic": {
+      "fixtures": {
+        "input_bin": "classic.mixtral.tokens",
+        "llmc_filepath": "classic.mixtral.weights"
+      },
+      "shape": {
+        "layers": 32,
+        "hidden": 4096,
+        "heads": 32
+      }
+    },
+    "tiny": {
+      "fixtures": {
+        "input_bin": "tiny.mixtral.tokens",
+        "llmc_filepath": "tiny.mixtral.weights"
+      },
+      "shape": {
+        "layers": 4,
+        "hidden": 32,
+        "heads": 4,
+        "max_sequence_length": 64
+      },
+      "args": {
+        "num_iteration": 4,
+        "sequence_length": 16
+      }
+    }
+  },
+  "argument_choices": {},
+  "backend_dtypes": {
+    "cpu": [
+      "float32"
+    ],
+    "cuda": [
+      "float32",
+      "bfloat16"
+    ],
+    "privateuseone": [
+      "float32",
+      "bfloat16"
+    ]
+  },
+  "backend_dtype_reasons": {
+    "cpu": "CPU training kernels are FP32-only: infini_train/src/kernels/cpu/linear.cc uses Tensor::EigenMatrix<float> and kFLOAT32 outputs; cpu/matmul.cc reads inputs as const float*. BF16 training is unsupported."
+  }
+}

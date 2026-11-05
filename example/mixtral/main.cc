@@ -49,12 +49,17 @@
 #include "infini_train/include/profiler.h"
 #endif
 
+#include "example/common/regression_output.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/mixtral/checkpoint_loader.h"
 #include "example/mixtral/config.h"
 
 // I/O
 DEFINE_string(input_bin, "", "input .bin to train on");
+DEFINE_string(metrics_file, "",
+              "Optional regression JSONL prefix (one file per rank)");
+DEFINE_string(regression_snapshot_dir, "",
+              "Optional per-step regression tensor snapshot directory");
 DEFINE_string(llmc_filepath, "", "llmc model file path to load from");
 // token layout for each step of the optimization
 DEFINE_uint32(micro_batch_size, 4, "batch size, in units of #batch dimensions");
@@ -172,6 +177,7 @@ void Train(const nn::parallel::Rank &rank) {
 
   std::shared_ptr<nn::Module> model;
   if (!FLAGS_llmc_filepath.empty()) {
+    model_config = mixtral::ConfigFromLLMC(FLAGS_llmc_filepath);
     model = mixtral::LoadFromLLMC(FLAGS_llmc_filepath, model_config);
   } else {
     model = std::make_shared<nn::TransformerModel>(model_config);
@@ -259,6 +265,11 @@ void Train(const nn::parallel::Rank &rank) {
   step_duration_ms.reserve(FLAGS_num_iteration);
   const double tokens_per_step =
       static_cast<double>(FLAGS_global_batch_size) * FLAGS_sequence_length;
+  regression::Output regression_output(
+      FLAGS_metrics_file, FLAGS_regression_snapshot_dir, "mixtral", FLAGS_dtype,
+      model_config, rank.GlobalRank(), ddp_world_size, 1, pp_world_size, 1,
+      ddp_rank, 0, pp_rank);
+  regression_output.Snapshot(0, model);
 
   LOG(INFO) << "Rank " << rank.GlobalRank()
             << ": start tiny Mixtral training on " << device.ToString();
@@ -323,6 +334,16 @@ void Train(const nn::parallel::Rank &rank) {
                                    step_end_time - step_start_time)
                                    .count();
     step_duration_ms.push_back(duration_ms);
+    if (regression_output.enabled()) {
+      const auto [peak_used, peak_reserved] =
+          device_impl->GetMemPoolPeakMB(device);
+      regression_output.Step(
+          step + 1, lossf, FLAGS_learning_rate,
+          static_cast<int64_t>(tokens_per_step), duration_ms, peak_used,
+          peak_reserved,
+          static_cast<size_t>(step + 1) * FLAGS_global_batch_size);
+      regression_output.Snapshot(step + 1, model, optimizer.get());
+    }
 
     if (rank.IsLastRank() && FLAGS_log_interval > 0 &&
         ((step + 1) % FLAGS_log_interval == 0 ||
@@ -341,6 +362,9 @@ void Train(const nn::parallel::Rank &rank) {
                 << std::endl;
     }
   }
+  regression_output.Complete(
+      FLAGS_num_iteration,
+      static_cast<size_t>(FLAGS_num_iteration) * FLAGS_global_batch_size);
 
   if (rank.IsLastRank() && FLAGS_print_timing && !step_duration_ms.empty()) {
     double duration_sum_ms = 0.0;

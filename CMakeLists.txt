@@ -274,6 +274,9 @@ add_executable(qwen3
   example/common/tokenizer.cc
 )
 link_infini_train_exe(qwen3)
+foreach(model_target gpt2 llama3 qwen3 mixtral)
+  target_sources(${model_target} PRIVATE example/common/regression_output.cc)
+endforeach()
 endif()
 
 # Tools

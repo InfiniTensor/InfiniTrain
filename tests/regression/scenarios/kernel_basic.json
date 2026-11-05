@@ -1,0 +1,13 @@
+{
+  "schema_version": 1,
+  "id": "kernel_basic",
+  "models": ["gpt2", "llama3", "qwen3", "mixtral"],
+  "profile": "classic",
+  "tags": ["perf", "kernel", "classic", "basic"],
+  "suites": ["perf"],
+  "matrix": {"dtype": ["float32", "bfloat16"]},
+  "args": {"num_iteration": 10},
+  "batch": {"micro_batch_samples": 1, "sequence_length": 64, "accumulation_steps": 1},
+  "checks": [{"kind": "finite_and_complete"}],
+  "timeout_seconds": 3600
+}

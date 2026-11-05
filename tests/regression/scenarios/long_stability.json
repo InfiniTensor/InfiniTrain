@@ -1,0 +1,44 @@
+{
+  "schema_version": 1,
+  "id": "long_stability",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3",
+    "mixtral"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "stability",
+    "tiny"
+  ],
+  "suites": [
+    "release"
+  ],
+  "args": {
+    "num_iteration": 200
+  },
+  "batch": {
+    "micro_batch_samples": 2,
+    "sequence_length": 16,
+    "accumulation_steps": 4
+  },
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    },
+    {
+      "kind": "oracle"
+    },
+    {
+      "kind": "memory_growth",
+      "metric": "peak_memory_bytes",
+      "warmup_steps": 10,
+      "window_steps": 20,
+      "max_growth_bytes": 67108864,
+      "max_growth_fraction": 0.1,
+      "min_increasing_fraction": 0.75
+    }
+  ],
+  "timeout_seconds": 3600
+}

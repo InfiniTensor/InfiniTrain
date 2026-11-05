@@ -1,0 +1,108 @@
+{
+  "schema_version": 1,
+  "id": "tiny_parallel",
+  "models": [
+    "gpt2"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "parallel",
+    "pairwise"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "strategy": "pairwise",
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ],
+    "dp": [
+      1,
+      2
+    ],
+    "tp": [
+      1,
+      2
+    ],
+    "pp": [
+      1,
+      2
+    ],
+    "vpp": [
+      1,
+      2
+    ],
+    "launch": [
+      "threads",
+      "processes"
+    ],
+    "sequence_parallel": [
+      false,
+      true
+    ],
+    "zero_stage": [
+      0,
+      1,
+      2
+    ],
+    "accumulation_steps": [
+      1,
+      4
+    ]
+  },
+  "high_risk": [
+    {
+      "dtype": "bfloat16",
+      "dp": 2,
+      "tp": 1,
+      "pp": 1,
+      "vpp": 1,
+      "launch": "threads",
+      "sequence_parallel": false,
+      "zero_stage": 2,
+      "accumulation_steps": 4
+    },
+    {
+      "dtype": "float32",
+      "dp": 2,
+      "tp": 2,
+      "pp": 1,
+      "vpp": 1,
+      "launch": "processes",
+      "sequence_parallel": true,
+      "zero_stage": 1,
+      "accumulation_steps": 4
+    },
+    {
+      "dtype": "float32",
+      "dp": 1,
+      "tp": 2,
+      "pp": 2,
+      "vpp": 2,
+      "launch": "threads",
+      "sequence_parallel": true,
+      "zero_stage": 0,
+      "accumulation_steps": 4
+    }
+  ],
+  "topology": {
+    "max_world_size": 4
+  },
+  "batch": {
+    "micro_batch_samples": 1,
+    "sequence_length": 16
+  },
+  "reference": {
+    "single_device": true,
+    "metrics": [
+      "loss",
+      "gradient",
+      "parameter"
+    ]
+  }
+}

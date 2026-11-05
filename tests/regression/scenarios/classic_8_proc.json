@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "id": "classic_8_proc",
+  "models": [
+    "gpt2",
+    "llama3"
+  ],
+  "profile": "classic",
+  "tags": [
+    "classic",
+    "8_proc"
+  ],
+  "suites": [
+    "nightly",
+    "release"
+  ],
+  "nproc_per_node": 8,
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    }
+  ],
+  "templates": [
+    {
+      "args": {"nthread_per_process": 1, "num_iteration": 10, "batch_size": 10, "total_batch_size": 5120},
+      "variants": [{"id": "3_8proc", "args": {"dtype": "float32"}}, {"id": "3_bfloat16_8proc", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 1, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4},
+      "variants": [{"id": "4_8proc", "args": {"dtype": "float32"}}, {"id": "4_bfloat16_8proc", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 1, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4, "sequence_parallel": true},
+      "variants": [{"id": "5_8proc", "args": {"dtype": "float32"}}, {"id": "5_bfloat16_8proc", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 1, "num_iteration": 10, "batch_size": 10, "total_batch_size": 5120, "pipeline_parallel": 8},
+      "variants": [{"id": "6_8proc", "args": {"dtype": "float32"}}, {"id": "6_bfloat16_8proc", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 1, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 2, "sequence_parallel": true, "pipeline_parallel": 2, "virtual_pipeline_parallel": 2},
+      "variants": [{"id": "8_8proc", "args": {"dtype": "float32"}}, {"id": "8_bfloat16_8proc", "args": {"dtype": "bfloat16"}}]
+    }
+  ]
+}

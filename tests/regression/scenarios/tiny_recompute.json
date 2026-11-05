@@ -1,0 +1,54 @@
+{
+  "schema_version": 1,
+  "id": "tiny_recompute",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "recompute",
+    "anchor",
+    "accumulation"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ],
+    "recompute_method": [
+      "uniform",
+      "block"
+    ]
+  },
+  "batch": {
+    "micro_batch_samples": 1,
+    "sequence_length": 16,
+    "accumulation_steps": 4
+  },
+  "args": {
+    "activation_recompute": true,
+    "recompute_granularity": "full",
+    "recompute_num_layers": 2
+  },
+  "reference": {
+    "args": {
+      "activation_recompute": false,
+      "recompute_granularity": "full",
+      "recompute_method": "none",
+      "recompute_num_layers": 0
+    },
+    "metrics": [
+      "loss",
+      "gradient",
+      "parameter"
+    ]
+  }
+}

@@ -1,0 +1,270 @@
+{
+  "schema_version": 1,
+  "id": "classic_recompute_qwen3",
+  "models": [
+    "qwen3"
+  ],
+  "profile": "classic",
+  "tags": [
+    "classic",
+    "recompute",
+    "qwen3"
+  ],
+  "suites": [
+    "nightly",
+    "release"
+  ],
+  "nproc_per_node": 1,
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    }
+  ],
+  "templates": [
+    {
+      "args": {
+        "dtype": "float32",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 1,
+        "total_batch_size": 64,
+        "tensor_parallel": 8
+      },
+      "variants": [
+        {
+          "id": "tp8_fp32_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "tp8_fp32_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "bfloat16",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 1,
+        "total_batch_size": 64,
+        "tensor_parallel": 8
+      },
+      "variants": [
+        {
+          "id": "tp8_bfloat16_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "tp8_bfloat16_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "float32",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 1,
+        "total_batch_size": 64,
+        "tensor_parallel": 8,
+        "sequence_parallel": true,
+        "tp_comm_overlap": true,
+        "tp_comm_bulk_dgrad": true,
+        "tp_comm_bulk_wgrad": true,
+        "tp_comm_overlap_ag": false,
+        "tp_comm_overlap_rs": false,
+        "tp_comm_overlap_rs_dgrad": false,
+        "tp_comm_overlap_disable_qkv": false,
+        "tp_comm_overlap_disable_fc1": false
+      },
+      "variants": [
+        {
+          "id": "tp8_sp_fp32_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "tp8_sp_fp32_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "float32",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 1,
+        "total_batch_size": 64,
+        "pipeline_parallel": 8
+      },
+      "variants": [
+        {
+          "id": "pp8_fp32_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "pp8_fp32_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "bfloat16",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 1,
+        "total_batch_size": 64,
+        "tensor_parallel": 8,
+        "lora_rank": 8,
+        "lora_alpha": 16.0,
+        "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2",
+        "lora_load_path": "$QWEN3_LORA_WEIGHTS_DIR"
+      },
+      "variants": [
+        {
+          "id": "tp8_lora_bfloat16_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "tp8_lora_bfloat16_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "float32",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 20,
+        "total_batch_size": 5120,
+        "tensor_parallel": 2,
+        "sequence_parallel": true,
+        "pipeline_parallel": 2,
+        "virtual_pipeline_parallel": 2,
+        "tp_comm_overlap": true,
+        "tp_comm_bulk_dgrad": false,
+        "tp_comm_bulk_wgrad": false,
+        "tp_comm_overlap_ag": true,
+        "tp_comm_overlap_rs": true,
+        "tp_comm_overlap_rs_dgrad": false,
+        "tp_comm_overlap_disable_qkv": false,
+        "tp_comm_overlap_disable_fc1": false
+      },
+      "variants": [
+        {
+          "id": "3d_ddp_tp2_pp2_fp32_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "3d_ddp_tp2_pp2_fp32_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    },
+    {
+      "args": {
+        "dtype": "bfloat16",
+        "nthread_per_process": 8,
+        "num_iteration": 10,
+        "batch_size": 20,
+        "total_batch_size": 5120,
+        "tensor_parallel": 2,
+        "sequence_parallel": true,
+        "pipeline_parallel": 2,
+        "virtual_pipeline_parallel": 2,
+        "tp_comm_overlap": true,
+        "tp_comm_bulk_dgrad": true,
+        "tp_comm_bulk_wgrad": true,
+        "tp_comm_overlap_ag": true,
+        "tp_comm_overlap_rs": true,
+        "tp_comm_overlap_rs_dgrad": true,
+        "tp_comm_overlap_disable_qkv": false,
+        "tp_comm_overlap_disable_fc1": false
+      },
+      "variants": [
+        {
+          "id": "3d_ddp_tp2_pp2_bf16_recompute_uniform2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "uniform",
+            "recompute_num_layers": 2
+          }
+        },
+        {
+          "id": "3d_ddp_tp2_pp2_bf16_recompute_block2",
+          "args": {
+            "activation_recompute": true,
+            "recompute_granularity": "full",
+            "recompute_method": "block",
+            "recompute_num_layers": 2
+          }
+        }
+      ]
+    }
+  ]
+}

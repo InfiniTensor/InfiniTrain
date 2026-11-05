@@ -1,0 +1,46 @@
+{
+  "schema_version": 1,
+  "backends": [
+    "cpu",
+    "cuda",
+    "privateuseone"
+  ],
+  "policies": {
+    "distributed_equivalence": {
+      "defaults": {
+        "float32": {
+          "atol": 0.00001,
+          "rtol": 0.00001
+        },
+        "bfloat16": {
+          "atol": 0.01,
+          "rtol": 0.01
+        }
+      }
+    },
+    "oracle": {
+      "defaults": {
+        "float32": {
+          "atol": 0.00001,
+          "rtol": 0.00001
+        },
+        "bfloat16": {
+          "atol": 0.01,
+          "rtol": 0.01
+        }
+      }
+    },
+    "lr_schedule": {
+      "defaults": {
+        "float32": {
+          "atol": 1e-9,
+          "rtol": 0.00001
+        },
+        "bfloat16": {
+          "atol": 1e-9,
+          "rtol": 0.00001
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "schema_version": 1,
+  "id": "tiny_smoke",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3",
+    "mixtral"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "anchor",
+    "smoke"
+  ],
+  "suites": [
+    "smoke",
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "batch": {
+    "micro_batch_samples": 2,
+    "sequence_length": 16,
+    "accumulation_steps": 1
+  },
+  "args": {
+    "dtype": "float32",
+    "num_iteration": 4
+  },
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    }
+  ]
+}
