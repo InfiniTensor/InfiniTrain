@@ -3,6 +3,8 @@
 #include <optional>
 #include <string>
 
+#include "infini_train/include/datatype.h"
+
 namespace infini_train::nn::parallel {
 
 enum class ContextParallelCommType {
@@ -25,6 +27,8 @@ struct ModelParallelConfig {
   int tensor_model_parallel_size = 1;
   int pipeline_model_parallel_size = 1;
   int virtual_pipeline_model_parallel_size = 1;
+  // Dtype used by pipeline payloads on the communication wire.
+  DataType pipeline_dtype = DataType::kFLOAT32;
   bool sequence_parallel = false;
   int expert_model_parallel_size = 1;
   std::optional<int> expert_tensor_parallel_size = std::nullopt;
