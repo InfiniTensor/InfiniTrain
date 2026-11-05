@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "tiny_checkpoint",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "checkpoint",
+    "anchor"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ]
+  },
+  "args": {
+    "num_iteration": 6,
+    "learning_rate": 0.0001,
+    "min_lr": 1e-05,
+    "lr_decay_style": "cosine",
+    "lr_warmup_iters": 2,
+    "lr_decay_iters": 6,
+    "save_interval": 3,
+    "overfit_single_batch": false
+  },
+  "batch": {
+    "micro_batch_samples": 2,
+    "sequence_length": 16,
+    "accumulation_steps": 1
+  },
+  "reference": {
+    "resume_step": 3,
+    "metrics": [
+      "loss",
+      "lr",
+      "consumed_samples",
+      "gradient",
+      "parameter",
+      "optimizer"
+    ]
+  }
+}

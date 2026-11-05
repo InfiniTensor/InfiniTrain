@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "tiny_lora",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "lora",
+    "anchor"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ]
+  },
+  "args": {
+    "lora_rank": 2,
+    "lora_alpha": 4.0,
+    "lora_target_modules": "c_attn,c_proj"
+  },
+  "batch": {
+    "micro_batch_samples": 1,
+    "sequence_length": 16,
+    "accumulation_steps": 4
+  },
+  "reference": {
+    "single_device": true,
+    "metrics": [
+      "loss",
+      "gradient",
+      "parameter"
+    ]
+  },
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    },
+    {
+      "kind": "lora_frozen"
+    }
+  ]
+}

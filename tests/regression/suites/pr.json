@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "pr",
+  "description": "Representative tiny training configurations, fixed anchors and constrained pairwise interactions",
+  "ctest": true,
+  "strict": true,
+  "exclusive": false
+}

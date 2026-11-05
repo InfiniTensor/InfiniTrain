@@ -1,0 +1,55 @@
+{
+  "config": {
+    "block_size": 64,
+    "intermediate_size": 64,
+    "n_embd": 32,
+    "n_head": 4,
+    "n_kv_head": 4,
+    "n_layer": 4,
+    "vocab_size": 128
+  },
+  "files": {
+    "tiny.gpt2.tokens": {
+      "path": "gpt2_tokens.bin",
+      "sha256": "31f1a81cfde4838e1de00f9696e4e0350446e6fc96a67a46065f163725455cb4",
+      "size_bytes": 33792
+    },
+    "tiny.gpt2.weights": {
+      "path": "gpt2_weights.bin",
+      "sha256": "8bee33df162bd083ccaab3966e95ee7e9be0a81a51eebfaae7a392f5b8695da9",
+      "size_bytes": 229120
+    },
+    "tiny.llama3.tokens": {
+      "path": "llama3_tokens.bin",
+      "sha256": "5851521cb150014b0edcde33dffe07d0ba603ca6ee651d09db19c442508ad1fd",
+      "size_bytes": 66560
+    },
+    "tiny.llama3.weights": {
+      "path": "llama3_weights.bin",
+      "sha256": "211d69dd6d2865865687c6cf2ff4f8527548708511e2e0e3fd6a4a02fa95de02",
+      "size_bytes": 198784
+    },
+    "tiny.mixtral.tokens": {
+      "path": "mixtral_tokens.bin",
+      "sha256": "5851521cb150014b0edcde33dffe07d0ba603ca6ee651d09db19c442508ad1fd",
+      "size_bytes": 66560
+    },
+    "tiny.mixtral.weights": {
+      "path": "mixtral_weights.bin",
+      "sha256": "0a7f4b14fd8d42f101e55ca3037b9a213190165bead7348d2550daf5d4838364",
+      "size_bytes": 495744
+    },
+    "tiny.qwen3.tokens": {
+      "path": "qwen3_tokens.bin",
+      "sha256": "5851521cb150014b0edcde33dffe07d0ba603ca6ee651d09db19c442508ad1fd",
+      "size_bytes": 66560
+    },
+    "tiny.qwen3.weights": {
+      "path": "qwen3_weights.bin",
+      "sha256": "71d3013bf0885f801566f2889fe391d6b947a90e2a32ba16732ca464cf6466b0",
+      "size_bytes": 199040
+    }
+  },
+  "fixture_version": 1,
+  "schema_version": 1
+}

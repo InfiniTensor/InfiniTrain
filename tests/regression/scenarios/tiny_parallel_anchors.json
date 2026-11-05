@@ -1,0 +1,52 @@
+{
+  "schema_version": 1,
+  "id": "tiny_parallel_anchors",
+  "models": [
+    "llama3",
+    "qwen3"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "parallel",
+    "anchor"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ],
+    "launch": [
+      "threads",
+      "processes"
+    ]
+  },
+  "topology": {
+    "dp": 1,
+    "tp": 2,
+    "pp": 2,
+    "vpp": 2
+  },
+  "batch": {
+    "micro_batch_samples": 1,
+    "sequence_length": 16,
+    "accumulation_steps": 4
+  },
+  "args": {
+    "sequence_parallel": true,
+    "zero_stage": 0
+  },
+  "reference": {
+    "single_device": true,
+    "metrics": [
+      "loss",
+      "gradient",
+      "parameter"
+    ]
+  }
+}

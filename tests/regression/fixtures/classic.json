@@ -1,0 +1,39 @@
+{
+  "schema_version": 1,
+  "description": "Relative to --data-root (the llmc directory). Actual file SHA256 participates in baseline identity; no invented published checksums.",
+  "files": {
+    "classic.gpt2.tokens": {
+      "path": "gpt2/tinyshakespeare/tiny_shakespeare_train.bin"
+    },
+    "classic.gpt2.weights": {
+      "path": "gpt2/gpt2_124M.bin"
+    },
+    "classic.gpt2.lora": {
+      "path": "gpt2/gpt2_124M_lora_weights_rank8_alpha16.bin"
+    },
+    "classic.llama3.tokens": {
+      "path": "llama3/tinyshakespeare/tiny_shakespeare_train.bin"
+    },
+    "classic.llama3.weights": {
+      "path": "llama3/llama3.2_1B_fp32.bin"
+    },
+    "classic.llama3.lora": {
+      "path": "llama3/llama3.2_1B_lora_weights_rank8_alpha16.bin"
+    },
+    "classic.qwen3.tokens": {
+      "path": "qwen3/tinyshakespeare/tiny_shakespeare_train.bin"
+    },
+    "classic.qwen3.weights": {
+      "path": "qwen3/qwen3-8b-fp32.llmc"
+    },
+    "classic.qwen3.lora": {
+      "path": "qwen3/qwen3_8b_lora_weights_rank8_alpha16.bin"
+    },
+    "classic.mixtral.tokens": {
+      "path": "llama3/tinyshakespeare/tiny_shakespeare_train.bin"
+    },
+    "classic.mixtral.weights": {
+      "path": "mixtral/mixtral_megatron_export.bin"
+    }
+  }
+}

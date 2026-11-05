@@ -1,0 +1,201 @@
+{
+  "schema_version": 1,
+  "id": "qwen3",
+  "binary": "qwen3",
+  "adapter": "dense",
+  "backends": [
+    "cpu",
+    "cuda",
+    "privateuseone"
+  ],
+  "dtypes": [
+    "float32",
+    "bfloat16"
+  ],
+  "argument_types": {
+    "input_bin": "string",
+    "metrics_file": "string",
+    "regression_snapshot_dir": "string",
+    "input_val_bin": "string",
+    "tokenizer_bin": "string",
+    "llmc_filepath": "string",
+    "model": "string",
+    "batch_size": "uint32",
+    "sequence_length": "uint32",
+    "total_batch_size": "uint32",
+    "num_iteration": "uint32",
+    "freq_generate_txt": "uint32",
+    "text_length": "uint32",
+    "learning_rate": "double",
+    "zero_stage": "int32",
+    "min_lr": "double",
+    "lr_decay_style": "string",
+    "lr_warmup_iters": "int64",
+    "lr_warmup_init": "double",
+    "lr_decay_iters": "int64",
+    "val_loss_every": "uint32",
+    "sample_every": "uint32",
+    "overfit_single_batch": "bool",
+    "device": "string",
+    "nthread_per_process": "int32",
+    "tensor_parallel": "uint32",
+    "sequence_parallel": "bool",
+    "pipeline_parallel": "uint32",
+    "virtual_pipeline_parallel": "uint32",
+    "dtype": "string",
+    "save_interval": "uint32",
+    "load": "string",
+    "save": "string",
+    "max_checkpoint_keep": "uint32",
+    "load_optimizer_state": "bool",
+    "save_optimizer_state": "bool",
+    "precision_check": "string",
+    "lora_rank": "int32",
+    "lora_alpha": "double",
+    "lora_target_modules": "string",
+    "lora_save_path": "string",
+    "lora_load_path": "string",
+    "activation_recompute": "bool",
+    "recompute_granularity": "string",
+    "recompute_method": "string",
+    "recompute_num_layers": "uint32",
+    "tp_comm_overlap": "bool",
+    "tp_comm_bulk_wgrad": "bool",
+    "tp_comm_bulk_dgrad": "bool",
+    "tp_comm_overlap_ag": "bool",
+    "tp_comm_overlap_rs": "bool",
+    "tp_comm_overlap_rs_dgrad": "bool",
+    "tp_comm_overlap_disable_qkv": "bool",
+    "tp_comm_overlap_disable_fc1": "bool"
+  },
+  "defaults": {
+    "input_bin": "",
+    "input_val_bin": "",
+    "tokenizer_bin": "",
+    "llmc_filepath": "",
+    "model": "qwen3",
+    "batch_size": 4,
+    "sequence_length": 64,
+    "total_batch_size": 256,
+    "num_iteration": 10,
+    "freq_generate_txt": 10,
+    "text_length": 64,
+    "learning_rate": 1e-05,
+    "zero_stage": 0,
+    "min_lr": 0.0,
+    "lr_decay_style": "constant",
+    "lr_warmup_iters": 0,
+    "lr_warmup_init": 0.0,
+    "lr_decay_iters": 0,
+    "val_loss_every": 0,
+    "sample_every": 0,
+    "overfit_single_batch": true,
+    "device": "cuda",
+    "nthread_per_process": 1,
+    "tensor_parallel": 1,
+    "sequence_parallel": false,
+    "pipeline_parallel": 1,
+    "virtual_pipeline_parallel": 1,
+    "dtype": "float32",
+    "save_interval": 0,
+    "load": "",
+    "save": "",
+    "max_checkpoint_keep": 3,
+    "load_optimizer_state": true,
+    "save_optimizer_state": true,
+    "precision_check": "",
+    "lora_rank": 0,
+    "lora_alpha": 16.0,
+    "lora_save_path": "",
+    "lora_load_path": "",
+    "activation_recompute": false,
+    "recompute_granularity": "full",
+    "recompute_method": "none",
+    "recompute_num_layers": 0,
+    "tp_comm_overlap": false,
+    "tp_comm_bulk_wgrad": true,
+    "tp_comm_bulk_dgrad": true,
+    "tp_comm_overlap_ag": true,
+    "tp_comm_overlap_rs": true,
+    "tp_comm_overlap_rs_dgrad": false,
+    "tp_comm_overlap_disable_qkv": false,
+    "tp_comm_overlap_disable_fc1": false
+  },
+  "capabilities": {
+    "distributed": true,
+    "zero_stages": [
+      0,
+      1,
+      2
+    ],
+    "checkpoint": true,
+    "lora": true
+  },
+  "profiles": {
+    "classic": {
+      "fixtures": {
+        "input_bin": "classic.qwen3.tokens",
+        "llmc_filepath": "classic.qwen3.weights"
+      },
+      "shape": {
+        "layers": 32,
+        "hidden": 4096,
+        "heads": 32
+      }
+    },
+    "tiny": {
+      "fixtures": {
+        "input_bin": "tiny.qwen3.tokens",
+        "llmc_filepath": "tiny.qwen3.weights"
+      },
+      "shape": {
+        "layers": 4,
+        "hidden": 32,
+        "heads": 4,
+        "max_sequence_length": 64
+      },
+      "args": {
+        "num_iteration": 4,
+        "sequence_length": 16
+      }
+    }
+  },
+  "argument_choices": {
+    "lr_decay_style": [
+      "none",
+      "constant",
+      "linear",
+      "cosine",
+      "inverse-square-root"
+    ],
+    "model": [
+      "qwen3"
+    ],
+    "recompute_granularity": [
+      "none",
+      "full",
+      "selective"
+    ],
+    "recompute_method": [
+      "none",
+      "uniform",
+      "block"
+    ]
+  },
+  "backend_dtypes": {
+    "cpu": [
+      "float32"
+    ],
+    "cuda": [
+      "float32",
+      "bfloat16"
+    ],
+    "privateuseone": [
+      "float32",
+      "bfloat16"
+    ]
+  },
+  "backend_dtype_reasons": {
+    "cpu": "CPU training kernels are FP32-only: infini_train/src/kernels/cpu/linear.cc uses Tensor::EigenMatrix<float> and kFLOAT32 outputs; cpu/matmul.cc reads inputs as const float*. BF16 training is unsupported."
+  }
+}

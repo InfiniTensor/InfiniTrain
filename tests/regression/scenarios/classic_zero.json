@@ -1,0 +1,53 @@
+{
+  "schema_version": 1,
+  "id": "classic_zero",
+  "models": [
+    "gpt2",
+    "llama3"
+  ],
+  "profile": "classic",
+  "tags": [
+    "classic",
+    "zero"
+  ],
+  "suites": [
+    "nightly",
+    "release"
+  ],
+  "nproc_per_node": 1,
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    }
+  ],
+  "templates": [
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 10, "total_batch_size": 5120, "zero_stage": 1},
+      "variants": [{"id": "3_distopt", "args": {"dtype": "float32"}}, {"id": "3_bfloat16_distopt", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 10, "total_batch_size": 5120, "zero_stage": 2},
+      "variants": [{"id": "3_zero2", "args": {"dtype": "float32"}}, {"id": "3_bfloat16_zero2", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4, "zero_stage": 1},
+      "variants": [{"id": "4_distopt", "args": {"dtype": "float32"}}, {"id": "4_bfloat16_distopt", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4, "zero_stage": 2},
+      "variants": [{"id": "4_zero2", "args": {"dtype": "float32"}}, {"id": "4_bfloat16_zero2", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4, "sequence_parallel": true, "zero_stage": 1},
+      "variants": [{"id": "5_distopt", "args": {"dtype": "float32"}}, {"id": "5_bfloat16_distopt", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 4, "sequence_parallel": true, "zero_stage": 2},
+      "variants": [{"id": "5_zero2", "args": {"dtype": "float32"}}, {"id": "5_bfloat16_zero2", "args": {"dtype": "bfloat16"}}]
+    },
+    {
+      "args": {"nthread_per_process": 8, "num_iteration": 10, "batch_size": 40, "total_batch_size": 5120, "tensor_parallel": 2, "sequence_parallel": true, "pipeline_parallel": 2, "virtual_pipeline_parallel": 2, "zero_stage": 1},
+      "variants": [{"id": "8_distopt", "args": {"dtype": "float32"}}, {"id": "8_bfloat16_distopt", "args": {"dtype": "bfloat16"}}]
+    }
+  ]
+}

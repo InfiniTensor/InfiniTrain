@@ -1,0 +1,17 @@
+{
+  "schema_version": 1,
+  "backend": "cuda",
+  "environment_class": "cuda-reference",
+  "exclusive_required_for_performance": true,
+  "minimum_gpus": 1,
+  "performance_identity_fields": [
+    "gpu_name",
+    "gpu_count",
+    "driver",
+    "cuda",
+    "nccl",
+    "cpu",
+    "build_options"
+  ],
+  "fixture_root_environment": "INFINITRAIN_FIXTURE_ROOT"
+}

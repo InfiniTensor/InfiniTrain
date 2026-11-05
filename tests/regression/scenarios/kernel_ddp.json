@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "id": "kernel_ddp",
+  "models": ["gpt2", "llama3", "qwen3"],
+  "profile": "classic",
+  "tags": ["perf", "kernel", "classic", "ddp"],
+  "suites": ["perf"],
+  "matrix": {"dtype": ["float32", "bfloat16"]},
+  "topology": {"dp": 2, "launch": "threads"},
+  "args": {"num_iteration": 10},
+  "batch": {"micro_batch_samples": 1, "sequence_length": 64, "accumulation_steps": 1},
+  "checks": [{"kind": "finite_and_complete"}],
+  "timeout_seconds": 3600
+}

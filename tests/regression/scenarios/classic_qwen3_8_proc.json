@@ -1,0 +1,141 @@
+{
+  "schema_version": 1,
+  "id": "classic_qwen3_8_proc",
+  "models": [
+    "qwen3"
+  ],
+  "profile": "classic",
+  "tags": [
+    "classic",
+    "qwen3_8_proc"
+  ],
+  "suites": [
+    "nightly",
+    "release"
+  ],
+  "nproc_per_node": 8,
+  "checks": [
+    {
+      "kind": "finite_and_complete"
+    }
+  ],
+  "templates": [
+    {
+      "args": {},
+      "variants": [
+        {
+          "id": "tp8_fp32_8proc",
+          "args": {
+            "dtype": "float32",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 1,
+            "total_batch_size": 64,
+            "tensor_parallel": 8
+          }
+        },
+        {
+          "id": "tp8_bfloat16_8proc",
+          "args": {
+            "dtype": "bfloat16",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 1,
+            "total_batch_size": 64,
+            "tensor_parallel": 8
+          }
+        },
+        {
+          "id": "tp8_sp_fp32_8proc",
+          "args": {
+            "dtype": "float32",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 1,
+            "total_batch_size": 64,
+            "tensor_parallel": 8,
+            "sequence_parallel": true,
+            "tp_comm_overlap": true,
+            "tp_comm_bulk_dgrad": false,
+            "tp_comm_bulk_wgrad": false,
+            "tp_comm_overlap_ag": false,
+            "tp_comm_overlap_rs": false,
+            "tp_comm_overlap_rs_dgrad": true,
+            "tp_comm_overlap_disable_qkv": false,
+            "tp_comm_overlap_disable_fc1": false
+          }
+        },
+        {
+          "id": "pp8_fp32_8proc",
+          "args": {
+            "dtype": "float32",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 1,
+            "total_batch_size": 64,
+            "pipeline_parallel": 8
+          }
+        },
+        {
+          "id": "tp8_lora_bfloat16_8proc",
+          "args": {
+            "dtype": "bfloat16",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 1,
+            "total_batch_size": 64,
+            "tensor_parallel": 8,
+            "lora_rank": 8,
+            "lora_alpha": 16.0,
+            "lora_target_modules": "c_attn,c_proj,c_fc,c_fc2",
+            "lora_load_path": "$QWEN3_LORA_WEIGHTS_DIR"
+          }
+        },
+        {
+          "id": "3d_ddp_tp2_pp2_fp32_8proc",
+          "args": {
+            "dtype": "float32",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 20,
+            "total_batch_size": 5120,
+            "tensor_parallel": 2,
+            "sequence_parallel": true,
+            "pipeline_parallel": 2,
+            "virtual_pipeline_parallel": 2,
+            "tp_comm_overlap": true,
+            "tp_comm_bulk_dgrad": true,
+            "tp_comm_bulk_wgrad": false,
+            "tp_comm_overlap_ag": true,
+            "tp_comm_overlap_rs": false,
+            "tp_comm_overlap_rs_dgrad": true,
+            "tp_comm_overlap_disable_qkv": true,
+            "tp_comm_overlap_disable_fc1": false
+          }
+        },
+        {
+          "id": "3d_ddp_tp2_pp2_bf16_8proc",
+          "args": {
+            "dtype": "bfloat16",
+            "nthread_per_process": 1,
+            "num_iteration": 10,
+            "batch_size": 20,
+            "total_batch_size": 5120,
+            "tensor_parallel": 2,
+            "sequence_parallel": true,
+            "pipeline_parallel": 2,
+            "virtual_pipeline_parallel": 2,
+            "tp_comm_overlap": true,
+            "tp_comm_bulk_dgrad": false,
+            "tp_comm_bulk_wgrad": true,
+            "tp_comm_overlap_ag": true,
+            "tp_comm_overlap_rs": true,
+            "tp_comm_overlap_rs_dgrad": true,
+            "tp_comm_overlap_disable_qkv": false,
+            "tp_comm_overlap_disable_fc1": true
+          }
+        }
+      ]
+    }
+  ]
+}

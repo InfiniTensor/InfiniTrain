@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "id": "tiny_accumulation",
+  "models": [
+    "gpt2",
+    "llama3",
+    "qwen3",
+    "mixtral"
+  ],
+  "profile": "tiny",
+  "tags": [
+    "tiny",
+    "anchor",
+    "accumulation"
+  ],
+  "suites": [
+    "pr",
+    "nightly",
+    "release"
+  ],
+  "matrix": {
+    "dtype": [
+      "float32",
+      "bfloat16"
+    ]
+  },
+  "batch": {
+    "micro_batch_samples": 1,
+    "sequence_length": 16,
+    "accumulation_steps": 4
+  },
+  "reference": {
+    "single_device": true,
+    "metrics": [
+      "loss",
+      "gradient",
+      "parameter"
+    ]
+  }
+}

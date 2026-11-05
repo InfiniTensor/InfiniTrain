@@ -1,0 +1,8 @@
+{
+  "schema_version": 1,
+  "id": "nightly",
+  "description": "All 155 classic tasks, tiny functional coverage and last-run log alignment",
+  "ctest": true,
+  "strict": true,
+  "exclusive": false
+}
