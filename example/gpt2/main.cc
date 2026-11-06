@@ -61,6 +61,7 @@
 #include "infini_train/include/utils/precision_check_config.h"
 #include "infini_train/include/utils/precision_checker.h"
 
+#include "example/common/cli.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/gpt2/checkpoint_loader.h"
@@ -729,13 +730,14 @@ void Train(const nn::parallel::Rank &rank) {
 int main(int argc, char *argv[]) {
   gflags::SetUsageMessage(
       "Train a GPT-2 model with InfiniTrain.\nUsage: " + std::string(argv[0]) +
-      " --input_bin=<training.bin> [options]");
+      " --input_bin=<training.bin> [options]\n"
+      "Model options: --help\nAll options: --helpfull");
   // Register provider metadata and implementations before gflags validates
   // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
   INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
 #endif
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  example::ParseModelFlags(&argc, &argv, "example/gpt2/");
   google::InitGoogleLogging(argv[0]);
 
   auto precision_config =
