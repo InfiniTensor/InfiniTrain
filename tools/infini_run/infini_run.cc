@@ -1,21 +1,27 @@
+// IWYU pragma: no_include <bits/types/sig_atomic_t.h>
+#include <fcntl.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 #include <algorithm>
 #include <cerrno>
 #include <chrono>
+#include <compare>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
 #include <filesystem>
+#include <memory>
 #include <ostream>
 #include <string>
-#include <system_error>
+#include <thread>
 #include <unordered_set>
 #include <vector>
 
 #include "gflags/gflags.h"
 #include "glog/logging.h"
+
+#include "infini_train/include/core/ccl/rendezvous_server.h"
 
 DEFINE_int32(nnodes, 1, "Total number of nodes");
 DEFINE_int32(nproc_per_node, 1, "Number of processes per node");
@@ -24,13 +30,17 @@ DEFINE_string(rdzv_endpoint, "127.0.0.1:29500",
               "Rendezvous endpoint (host:port)");
 
 DEFINE_string(rdzv_id, "", "Unique job ID shared by all nodes");
+DEFINE_int32(rdzv_timeout, 120, "Rendezvous timeout in seconds");
+DEFINE_string(log_dir, "", "Directory for per-rank stdout/stderr logs");
 
 namespace {
+volatile std::sig_atomic_t g_signal = 0;
+void HandleSignal(int signal) { g_signal = signal; }
 
 bool IsLauncherFlag(const std::string &flag) {
   return flag == "--nnodes" || flag == "--nproc_per_node" ||
          flag == "--node_rank" || flag == "--rdzv_endpoint" ||
-         flag == "--rdzv_id";
+         flag == "--rdzv_id" || flag == "--rdzv_timeout" || flag == "--log_dir";
 }
 
 int FindTrainProgramIndex(int argc, char **argv) {
@@ -67,9 +77,10 @@ void SetEnvInt(const char *name, int value) {
   setenv(name, value_str.c_str(), 1);
 }
 
-void TerminateChildren(const std::unordered_set<pid_t> &child_pids) {
+void TerminateChildren(const std::unordered_set<pid_t> &child_pids,
+                       int signal = SIGTERM) {
   for (pid_t child_pid : child_pids) {
-    kill(child_pid, SIGTERM);
+    kill(child_pid, signal);
   }
 }
 
@@ -81,25 +92,6 @@ int ExitCodeFromStatus(int status) {
     return 128 + WTERMSIG(status);
   }
   return 1;
-}
-
-void CleanupRunUniqueIdFiles(const std::string &run_id) {
-  const std::string prefix = "cclUniqueId_" + run_id + "_";
-  for (const auto &entry :
-       std::filesystem::directory_iterator(std::filesystem::current_path())) {
-    if (!entry.is_regular_file()) {
-      continue;
-    }
-    const std::string filename = entry.path().filename().string();
-    if (filename.rfind(prefix, 0) == 0) {
-      std::error_code ec;
-      std::filesystem::remove(entry.path(), ec);
-      if (ec) {
-        LOG(WARNING) << "Failed to remove unique-id file " << entry.path()
-                     << ": " << ec.message();
-      }
-    }
-  }
 }
 
 std::string GenerateLocalRunId() {
@@ -127,6 +119,7 @@ int main(int argc, char **argv) {
   CHECK_GE(FLAGS_node_rank, 0) << "node_rank must be non-negative";
   CHECK_LT(FLAGS_node_rank, FLAGS_nnodes)
       << "node_rank must be less than nnodes";
+  CHECK_GT(FLAGS_rdzv_timeout, 0) << "rdzv_timeout must be positive";
   CHECK_NE(FLAGS_rdzv_endpoint.find(':'), std::string::npos)
       << "rdzv_endpoint must be host:port";
   CHECK(FLAGS_nnodes == 1 || !FLAGS_rdzv_id.empty())
@@ -143,12 +136,39 @@ int main(int argc, char **argv) {
   train_argv.push_back(nullptr);
 
   int proc_world_size = FLAGS_nnodes * FLAGS_nproc_per_node;
-  std::string master_addr =
-      FLAGS_rdzv_endpoint.substr(0, FLAGS_rdzv_endpoint.find(':'));
-  std::string master_port =
-      FLAGS_rdzv_endpoint.substr(FLAGS_rdzv_endpoint.find(':') + 1);
+  const size_t separator = FLAGS_rdzv_endpoint.rfind(':');
+  std::string master_addr = FLAGS_rdzv_endpoint.substr(0, separator);
+  std::string master_port = FLAGS_rdzv_endpoint.substr(separator + 1);
+  char *port_end = nullptr;
+  errno = 0;
+  const long parsed_port = std::strtol(master_port.c_str(), &port_end, 10);
+  CHECK(errno == 0 && port_end != master_port.c_str() && *port_end == '\0' &&
+        parsed_port > 0 && parsed_port <= 65535)
+      << "Invalid rendezvous port: " << master_port;
   const std::string run_id =
       FLAGS_rdzv_id.empty() ? GenerateLocalRunId() : FLAGS_rdzv_id;
+  const bool endpoint_is_default =
+      gflags::GetCommandLineFlagInfoOrDie("rdzv_endpoint").is_default;
+  int effective_master_port = static_cast<int>(parsed_port);
+  std::unique_ptr<infini_train::core::RendezvousServer> server;
+  if (proc_world_size > 1 && FLAGS_node_rank == 0) {
+    if (FLAGS_nnodes == 1 && endpoint_is_default) {
+      master_addr = "127.0.0.1";
+      effective_master_port = 0;
+    }
+    server = std::make_unique<infini_train::core::RendezvousServer>(
+        master_addr, effective_master_port, FLAGS_rdzv_timeout);
+    effective_master_port = server->port();
+  }
+  const std::string effective_master_port_text =
+      std::to_string(effective_master_port);
+  if (!FLAGS_log_dir.empty())
+    std::filesystem::create_directories(FLAGS_log_dir);
+  struct sigaction action {};
+  action.sa_handler = HandleSignal;
+  sigemptyset(&action.sa_mask);
+  sigaction(SIGINT, &action, nullptr);
+  sigaction(SIGTERM, &action, nullptr);
 
   std::unordered_set<pid_t> running_children;
   int exit_code = 0;
@@ -157,10 +177,11 @@ int main(int argc, char **argv) {
        ++local_proc_rank) {
     pid_t pid = fork();
     if (pid < 0) {
-      perror("fork failed");
-      exit_code = 1;
+      PLOG(ERROR) << "fork failed after starting " << running_children.size()
+                  << " rank processes";
       TerminateChildren(running_children);
-      break;
+      for (pid_t child : running_children) waitpid(child, nullptr, 0);
+      return 1;
     }
     if (pid == 0) {
       int global_proc_rank =
@@ -168,24 +189,63 @@ int main(int argc, char **argv) {
       SetEnvInt("LOCAL_WORLD_SIZE", FLAGS_nproc_per_node);
 
       setenv("MASTER_ADDR", master_addr.c_str(), 1);
-      setenv("MASTER_PORT", master_port.c_str(), 1);
+      setenv("MASTER_PORT", effective_master_port_text.c_str(), 1);
       setenv("INFINI_RUN_ID", run_id.c_str(), 1);
+      setenv("INFINI_RDZV_TIMEOUT_SEC",
+             std::to_string(FLAGS_rdzv_timeout).c_str(), 1);
 
       SetEnvInt("RANK", global_proc_rank);
       SetEnvInt("LOCAL_RANK", local_proc_rank);
 
       SetEnvInt("WORLD_SIZE", proc_world_size);
 
+      if (!FLAGS_log_dir.empty()) {
+        const std::string prefix =
+            FLAGS_log_dir + "/rank-" + std::to_string(global_proc_rank);
+        int out = open((prefix + ".stdout.log").c_str(),
+                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        int err = open((prefix + ".stderr.log").c_str(),
+                       O_WRONLY | O_CREAT | O_TRUNC, 0644);
+        CHECK_GE(out, 0);
+        CHECK_GE(err, 0);
+        dup2(out, STDOUT_FILENO);
+        dup2(err, STDERR_FILENO);
+        close(out);
+        close(err);
+      }
+      char hostname[256] = {};
+      gethostname(hostname, sizeof(hostname) - 1);
+      fprintf(stderr,
+              "INFINITRAIN_RANK hostname=%s global_rank=%d local_rank=%d "
+              "world_size=%d device=%d job_id=%s\n",
+              hostname, global_proc_rank, local_proc_rank, proc_world_size,
+              local_proc_rank, run_id.c_str());
+      fflush(stderr);
       execvp(train_program.c_str(), train_argv.data());
       perror("exec failed");
-      exit(1);
+      _exit(127);
     }
     running_children.insert(pid);
   }
 
+  bool term_sent = false;
+  auto term_time = std::chrono::steady_clock::now();
   while (!running_children.empty()) {
+    if (g_signal && !term_sent) {
+      exit_code = 128 + g_signal;
+      TerminateChildren(running_children);
+      term_sent = true;
+      term_time = std::chrono::steady_clock::now();
+    }
+    if (term_sent &&
+        std::chrono::steady_clock::now() - term_time > std::chrono::seconds(10))
+      TerminateChildren(running_children, SIGKILL);
     int status;
-    pid_t child = wait(&status);
+    pid_t child = waitpid(-1, &status, term_sent ? WNOHANG : 0);
+    if (child == 0) {
+      std::this_thread::sleep_for(std::chrono::milliseconds(100));
+      continue;
+    }
     if (child < 0) {
       if (errno == EINTR) {
         continue;
@@ -203,11 +263,10 @@ int main(int argc, char **argv) {
     if (child_exit_code != 0 && exit_code == 0) {
       exit_code = child_exit_code;
       TerminateChildren(running_children);
+      term_sent = true;
+      term_time = std::chrono::steady_clock::now();
     }
   }
 
-  if (FLAGS_nnodes == 1) {
-    CleanupRunUniqueIdFiles(run_id);
-  }
   return exit_code;
 }
