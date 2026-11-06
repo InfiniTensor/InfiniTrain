@@ -182,6 +182,17 @@ constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles = {
     "none", "constant", "linear", "cosine", "inverse-square-root"};
 
+DataType ParseDtype(const std::string &dtype) {
+  if (dtype == kDtypeFP32) {
+    return DataType::kFLOAT32;
+  }
+  if (dtype == kDtypeBF16) {
+    return DataType::kBFLOAT16;
+  }
+  LOG(FATAL) << "Datatype " << dtype << " not supported.";
+  return DataType::kFLOAT32;
+}
+
 }  // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) {
@@ -341,15 +352,7 @@ void Train(const nn::parallel::Rank &rank) {
 
   LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
-  DataType dtype;
-  if (FLAGS_dtype == kDtypeFP32) {
-    dtype = DataType::kFLOAT32;
-  } else if (FLAGS_dtype == kDtypeBF16) {
-    dtype = DataType::kBFLOAT16;
-  } else {
-    LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype
-               << " not supported.";
-  }
+  const DataType dtype = ParseDtype(FLAGS_dtype);
 
   auto num_micro_batches =
       FLAGS_total_batch_size /
@@ -730,6 +733,7 @@ int main(int argc, char *argv[]) {
   auto precision_config =
       utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
   nn::parallel::ModelParallelConfig model_parallel_config;
+  model_parallel_config.pipeline_dtype = ParseDtype(FLAGS_dtype);
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
   model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
   model_parallel_config.virtual_pipeline_model_parallel_size =

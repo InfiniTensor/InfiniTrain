@@ -12,10 +12,10 @@
 #include "glog/logging.h"
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_stage.h"
 #include "infini_train/include/nn/parallel/pp/send_recv.h"
 #include "infini_train/include/nn/parallel/utils.h"
@@ -56,11 +56,10 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev(
     int peer_rank) {
   std::vector<std::shared_ptr<Tensor>> recv_tensors;
   auto &shapes = stage_->recv_shape();
+  const auto pipeline_dtype = global::GetModelParallelConfig().pipeline_dtype;
   for (size_t i = 0; i < shapes.size(); ++i) {
-    // FIXME(jym): The data type between stages is not float32, which will cause
-    // a crash
-    auto tensor = std::make_shared<Tensor>(shapes[i], DataType::kFLOAT32,
-                                           stage_->device());
+    auto tensor =
+        std::make_shared<Tensor>(shapes[i], pipeline_dtype, stage_->device());
     tensor->set_requires_grad(true);
 
     // Mark as non-leaf to prevent the autograd engine from creating an
@@ -75,12 +74,17 @@ std::vector<std::shared_ptr<Tensor>> PipelineSchedule::ReceiveFromPrev(
     recv_tensors.push_back(tensor);
   }
 
-  return IRecv(recv_tensors, stage_->device(), peer_rank);
+  const auto activation_dtype =
+      global::GetModelParallelConfig().pipeline_activation_dtype;
+  return IRecv(recv_tensors, stage_->device(), peer_rank, pipeline_dtype,
+               activation_dtype);
 }
 
 std::vector<std::shared_ptr<Tensor>> PipelineSchedule::SendToNext(
     const std::vector<std::shared_ptr<Tensor>> &tensors, int peer_rank) {
-  return ISend(tensors, stage_->device(), peer_rank, stage_->recv_shape());
+  const auto pipeline_dtype = global::GetModelParallelConfig().pipeline_dtype;
+  return ISend(tensors, stage_->device(), peer_rank, stage_->recv_shape(),
+               pipeline_dtype);
 }
 
 PipelineParallelScheduler::Task PipelineParallelScheduler::CreateTask(
