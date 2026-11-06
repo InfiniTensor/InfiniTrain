@@ -61,6 +61,7 @@
 #include "infini_train/include/profiler.h"
 #endif
 
+#include "example/common/cli.h"
 #include "example/common/tiny_shakespeare_dataset.h"
 #include "example/common/tokenizer.h"
 #include "example/llama3/checkpoint_loader.h"
@@ -721,13 +722,14 @@ void Train(const nn::parallel::Rank &rank) {
 int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Train a LLaMA 3 model with InfiniTrain.\nUsage: " +
                           std::string(argv[0]) +
-                          " --input_bin=<training.bin> [options]");
+                          " --input_bin=<training.bin> [options]\n"
+                          "Model options: --help\nAll options: --helpfull");
   // Register provider metadata and implementations before gflags validates
   // --device. The device runtime initializes lazily on first DeviceGuard use.
 #ifdef INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR
   INFINITRAIN_EXAMPLE_EXTERNAL_BACKEND_REGISTRAR();
 #endif
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+  example::ParseModelFlags(&argc, &argv, "example/llama3/");
   google::InitGoogleLogging(argv[0]);
 
   auto precision_config =

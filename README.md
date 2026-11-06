@@ -105,6 +105,9 @@ To view available runtime options:
 ./build/llama3 --help
 ```
 
+`--help` shows only the model's options. Use `--helpfull` to include all options
+from third-party libraries.
+
 ### Getting Started
 
 #### Prepare Datasets and Weights

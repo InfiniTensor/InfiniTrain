@@ -20,6 +20,7 @@
 #include "infini_train/include/optimizer.h"
 #include "infini_train/include/tensor.h"
 
+#include "example/common/cli.h"
 #include "example/mnist/dataset.h"
 #include "example/mnist/net.h"
 
@@ -46,8 +47,9 @@ DEFINE_validator(device, [](const char *, const std::string &value) {
 int main(int argc, char *argv[]) {
   gflags::SetUsageMessage("Train a model on MNIST with InfiniTrain.\nUsage: " +
                           std::string(argv[0]) +
-                          " --dataset=<dataset_dir> [options]");
-  gflags::ParseCommandLineFlags(&argc, &argv, true);
+                          " --dataset=<dataset_dir> [options]\n"
+                          "Model options: --help\nAll options: --helpfull");
+  example::ParseModelFlags(&argc, &argv, "example/mnist/");
   google::InitGoogleLogging(argv[0]);
 
   auto train_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, true);
