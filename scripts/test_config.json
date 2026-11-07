@@ -19,7 +19,7 @@
         "MIXTRAL_INPUT_BIN": "/data1/shared/InfiniTrain-dev/data/llmc/llama3/tinyshakespeare/tiny_shakespeare_train.bin",
         "MIXTRAL_LLMC_FILEPATH": "/data1/shared/InfiniTrain-dev/data/llmc/mixtral/mixtral_megatron_export.bin",
         "GPT2_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,recompute",
-        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,recompute",
+        "LLAMA3_TEST_GROUPS": "basic,zero,lora,checkpoint,lr_scheduler,8_proc,recompute,offload",
         "QWEN3_TEST_GROUPS": "qwen3,qwen3_8_proc",
         "MIXTRAL_TEST_GROUPS": "moe"
     },
@@ -380,6 +380,136 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "zero_stage": 1
+                    }
+                }
+            ]
+        },
+        {
+            "tag": "offload",
+            "models": [
+                "llama3"
+            ],
+            "tests": [
+                {
+                    "id": "3_zero1_offload",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "zero_stage": 1,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "3_bfloat16_zero1_offload",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "zero_stage": 1,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "4_offload",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "4_bfloat16_offload",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "5_zero2_offload",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 2,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "5_bfloat16_zero2_offload",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 4,
+                        "sequence_parallel": true,
+                        "zero_stage": 2,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "8_offload",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
+                    }
+                },
+                {
+                    "id": "8_bfloat16_offload",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "optimizer_cpu_offload": true,
+                        "optimizer_offload_fraction": 1.0,
+                        "overlap_cpu_optimizer_d2h_h2d": true
                     }
                 }
             ]
