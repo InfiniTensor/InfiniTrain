@@ -51,6 +51,9 @@ void Gemm(Device device, GemmParams p) {
 
   // COMPUTE_32F alone still permits reduced-precision intermediate reductions
   // for FP16/BF16 outputs. Keep partial sums in FP32 as well.
+  // PyTorch comparisons should set both:
+  //   torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
+  //   torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
   CUBLAS_CHECK(cublasSetMathMode(
       blas_handle, CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION));
   // FIXME: Allow workspace-backed algorithms once their accumulation accuracy
