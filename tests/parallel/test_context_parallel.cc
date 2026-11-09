@@ -114,6 +114,26 @@ TEST(ContextParallelLayoutTest, ZigzagRequiresTwoEqualChunksPerRank) {
   }
 }
 
+TEST(ContextParallelLayoutTest, CausalMaskUsesGlobalPositions) {
+  const int cp_size = global::GetContextParallelSize();
+  const int64_t local_t = 8;
+  const int64_t full_t = local_t * cp_size;
+  for (int rank = 0; rank < cp_size; ++rank) {
+    parallel::cp_rank = rank;
+    const auto positions = LocalPositions(rank, full_t);
+    auto mask = parallel::MakeCausalMaskAlongCPRegionFunc(local_t, Device());
+    ASSERT_EQ(mask->Dims(), (std::vector<int64_t>{1, 1, local_t, full_t}));
+    ASSERT_EQ(mask->Dtype(), DataType::kBOOL);
+    const auto *actual = static_cast<const uint8_t *>(mask->DataPtr());
+    for (int64_t i = 0; i < local_t; ++i) {
+      for (int64_t k = 0; k < full_t; ++k) {
+        EXPECT_EQ(actual[i * full_t + k], positions[i] < k ? 1 : 0);
+      }
+    }
+  }
+  parallel::cp_rank = 0;
+}
+
 #if defined(USE_CUDA) && defined(USE_NCCL)
 struct AttentionReference {
   std::vector<double> output;

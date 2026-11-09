@@ -139,7 +139,7 @@ DEFINE_uint32(context_parallel, 1, "Context Parallel world size");
 DEFINE_string(
     cp_comm_type, "p2p",
     "Context Parallel communication type (all_gather|p2p|a2a|a2a+p2p)");
-DEFINE_string(attention_cp_layout, "contiguous",
+DEFINE_string(attention_cp_layout, "zigzag",
               "Context Parallel sequence layout (contiguous|zigzag)");
 DEFINE_string(hierarchical_context_parallel_sizes, "",
               "A2A,P2P subgroup sizes for a2a+p2p, e.g. 2,2");

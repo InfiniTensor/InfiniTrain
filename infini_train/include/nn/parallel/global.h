@@ -4,7 +4,6 @@
 #include <cstdint>
 #include <initializer_list>
 #include <mutex>
-#include <optional>
 #include <string>
 #include <vector>
 
@@ -130,7 +129,7 @@ class GlobalEnv {
 
   int context_parallel_size_ = 1;
   std::string context_parallel_comm_type_ = "p2p";
-  std::string attention_cp_layout_ = "contiguous";
+  std::string attention_cp_layout_ = "zigzag";
   std::vector<int> hierarchical_context_parallel_sizes_;
 
   int data_parallel_size_ = 1;

@@ -16,7 +16,6 @@
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
-#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -255,12 +254,7 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(
     auto freqs_view = nn::parallel::SliceAlongCPRegionFunc(
         buffers_[kFreqsCisName]->Slice(0, 0, full_t, 1), 0);
 
-    // Create causal mask
-    std::shared_ptr<Tensor> ones = std::make_shared<Tensor>(
-        nn::function::Ones({full_t, full_t})->To(device));
-    auto mask =
-        nn::parallel::SliceAlongCPRegionFunc(nn::function::Triu(ones, 1), 0)
-            ->View({1, 1, local_t, full_t});
+    auto mask = nn::parallel::MakeCausalMaskAlongCPRegionFunc(local_t, device);
 
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 

@@ -1,10 +1,10 @@
 #include <cstdlib>
-#include <optional>
 
 #include "gflags/gflags.h"
 #include "gtest/gtest.h"
 
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 
 DEFINE_int32(context_parallel, 4, "CP group size");
 DEFINE_int32(tensor_parallel, 1, "Use TP to exercise non-contiguous CP ranks");
@@ -19,9 +19,14 @@ int main(int argc, char **argv) {
   setenv("LOCAL_WORLD_SIZE", "1", 1);
   setenv("RANK", "0", 1);
   setenv("LOCAL_RANK", "0", 1);
+  infini_train::nn::parallel::ModelParallelConfig model_parallel_config;
+  model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
+  model_parallel_config.context_model_parallel_size = FLAGS_context_parallel;
+  model_parallel_config.context_parallel_comm_type = FLAGS_cp_comm_type;
+  model_parallel_config.hierarchical_context_parallel_sizes =
+      FLAGS_hierarchical_context_parallel_sizes;
+  model_parallel_config.attention_cp_layout = FLAGS_attention_cp_layout;
   infini_train::nn::parallel::global::InitAllEnv(
-      FLAGS_context_parallel * FLAGS_tensor_parallel, FLAGS_tensor_parallel,
-      false, 1, 1, 1, 1, FLAGS_context_parallel, FLAGS_cp_comm_type,
-      FLAGS_hierarchical_context_parallel_sizes, FLAGS_attention_cp_layout);
+      FLAGS_context_parallel * FLAGS_tensor_parallel, model_parallel_config);
   return RUN_ALL_TESTS();
 }

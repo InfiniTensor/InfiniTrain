@@ -23,6 +23,8 @@
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
+#include "infini_train/include/nn/init.h"
+#include "infini_train/include/nn/modules/transformer/utils.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -298,20 +300,6 @@ std::vector<std::shared_ptr<Work>> P2PCommunicate(
   return works;
 }
 
-std::shared_ptr<Tensor> RepeatKVHeads(const std::shared_ptr<Tensor> &x,
-                                      int64_t n_rep) {
-  if (n_rep == 1) {
-    return x;
-  }
-
-  const auto &shape = x->Dims();
-  const int64_t B = shape[0], H = shape[1], T = shape[2], D = shape[3];
-  return x->View({B, H, 1, T, D})
-      ->RepeatInterleave(n_rep, 2)
-      ->Contiguous()
-      ->View({B, H * n_rep, T, D});
-}
-
 std::shared_ptr<Tensor> SumRepeatedKVHeads(const std::shared_ptr<Tensor> &x,
                                            int64_t n_rep) {
   if (n_rep == 1) {
@@ -322,22 +310,6 @@ std::shared_ptr<Tensor> SumRepeatedKVHeads(const std::shared_ptr<Tensor> &x,
   const int64_t B = shape[0], H = shape[1], T = shape[2], D = shape[3];
   CHECK_EQ(H % n_rep, 0);
   return x->View({B, H / n_rep, n_rep, T, D})->Sum(2);
-}
-
-std::shared_ptr<Tensor> ApplyCoreAttention(
-    const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
-    const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
-  const float scale = static_cast<float>(
-      1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
-  // scores: (B, H, T_q, T_k)
-  auto scores = q->Matmul(k->Transpose(-2, -1)) * scale;
-  if (mask) {
-    scores = scores->MaskedFill(mask, std::numeric_limits<float>::lowest());
-  }
-  // probs: (B, H, T_q, T_k)
-  auto probs = nn::function::Softmax(scores, -1);
-  // output: (B, H, T_q, D)
-  return probs->Matmul(v);
 }
 
 // Autograd Function Definitions
@@ -1027,6 +999,36 @@ std::shared_ptr<Tensor> SliceAlongCPRegionFunc(
       ->Contiguous();
 }
 
+std::shared_ptr<Tensor> MakeCausalMaskAlongCPRegionFunc(int64_t local_t,
+                                                        const Device &device) {
+  const int cp_size = global::GetContextParallelSize();
+  const int rank = GetContextParallelRank();
+  const int64_t full_t = local_t * cp_size;
+  auto keys = nn::init::Arange(0, full_t, DataType::kFLOAT32, device);
+  std::vector<int64_t> query_positions(local_t);
+  if (global::GetAttentionCPLayout() == "zigzag" && cp_size > 1) {
+    CHECK_EQ(local_t % 2, 0)
+        << "Zigzag CP sequence length must contain two equal halves";
+    const int64_t half = local_t / 2;
+    for (int64_t i = 0; i < half; ++i) {
+      query_positions[i] = rank * half + i;
+      query_positions[half + i] = (2 * cp_size - rank - 1) * half + i;
+    }
+  } else {
+    for (int64_t i = 0; i < local_t; ++i) {
+      query_positions[i] = rank * local_t + i;
+    }
+  }
+
+  std::vector<std::shared_ptr<Tensor>> mask_rows;
+  mask_rows.reserve(local_t);
+  for (const int64_t query_position : query_positions) {
+    mask_rows.push_back(std::make_shared<Tensor>(
+        keys->Gt(query_position)->To(DataType::kBOOL)));
+  }
+  return nn::function::Concat(mask_rows, 0)->View({1, 1, local_t, full_t});
+}
+
 namespace {
 
 std::shared_ptr<Tensor> GatherFromCPRegionFunc(
@@ -1056,10 +1058,7 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(
   // gathered_v: (B, H_kv, T_g, D)
   auto gathered_v = GatherFromCPRegionFunc(v);
   // k_for_attn: (B, H_q, T_g, D)
-  auto k_for_attn = RepeatKVHeads(gathered_k, n_rep);
-  // v_for_attn: (B, H_q, T_g, D)
-  auto v_for_attn = RepeatKVHeads(gathered_v, n_rep);
-  return ApplyCoreAttention(q, k_for_attn, v_for_attn, mask);
+  return ScaledDotProductAttention(q, gathered_k, gathered_v, n_rep, mask);
 }
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
@@ -1076,8 +1075,7 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
   CHECK_EQ(q_heads % kv_heads, 0);
 
   if (cp_size == 1) {
-    return ApplyCoreAttention(q, RepeatKVHeads(k, q_heads / kv_heads),
-                              RepeatKVHeads(v, q_heads / kv_heads), mask);
+    return ScaledDotProductAttention(q, k, v, q_heads / kv_heads, mask);
   }
 
   const auto *cp_group = GetCPGroup(q);
@@ -1092,13 +1090,9 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
   auto full_mask = mask ? GatherFromCPRegionFunc(mask) : nullptr;
 
   const int64_t n_rep = q_shard->Dims()[1] / k_shard->Dims()[1];
-  // k_for_attn: (B, H_q/CP, T_g, D)
-  auto k_for_attn = RepeatKVHeads(k_shard, n_rep);
-  // v_for_attn: (B, H_q/CP, T_g, D)
-  auto v_for_attn = RepeatKVHeads(v_shard, n_rep);
   // output_shard: (B, H_q/CP, T_g, D)
   auto output_shard =
-      ApplyCoreAttention(q_shard, k_for_attn, v_for_attn, full_mask);
+      ScaledDotProductAttention(q_shard, k_shard, v_shard, n_rep, full_mask);
 
   // output: (B, H_q, T_l, D)
   return AllToAllHeadToSeqCPRegionFunc(output_shard, cp_group);

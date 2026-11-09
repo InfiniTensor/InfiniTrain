@@ -5,6 +5,7 @@
 #include <charconv>
 #include <cstdlib>
 #include <format>
+#include <optional>
 #include <sstream>
 #include <string>
 #include <system_error>
@@ -57,8 +58,7 @@ std::string OrderString(const RankGenerator &rank_generator, bool expert_view) {
   bool is_first_axis = true;
   for (int index = 0; index < kAxisCount; ++index) {
     const Axis axis = rank_generator.order()[index];
-    if ((!expert_view && axis == kEp) ||
-        (axis == kCp && rank_generator.AxisSize(kCp) == 1)) {
+    if (!expert_view && axis == kEp) {
       continue;
     }
     if (!is_first_axis) {
@@ -348,8 +348,7 @@ void GlobalEnv::Init(int nthread_per_process,
   CHECK_GE(resolved_expert_tensor_parallel_size, 1)
       << "Expert Tensor Parallel size must be >= 1";
 
-  CHECK_GE(context_parallel_size, 1)
-      << "Context Parallel size must be >= 1";
+  CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
   context_parallel_size_ = context_parallel_size;
   context_parallel_comm_type_ = context_parallel_comm_type;
   CHECK(attention_cp_layout == "contiguous" || attention_cp_layout == "zigzag")
@@ -371,15 +370,13 @@ void GlobalEnv::Init(int nthread_per_process,
     const auto a2a_result = std::from_chars(begin, begin + separator, a2a_size);
     const auto p2p_result =
         std::from_chars(begin + separator + 1, end, p2p_size);
-    CHECK(a2a_result.ec == std::errc{} &&
-          a2a_result.ptr == begin + separator && p2p_result.ec == std::errc{} &&
-          p2p_result.ptr == end)
+    CHECK(a2a_result.ec == std::errc{} && a2a_result.ptr == begin + separator &&
+          p2p_result.ec == std::errc{} && p2p_result.ptr == end)
         << "hierarchical_context_parallel_sizes must contain exactly two "
            "integers: A,P";
     CHECK_GT(a2a_size, 0);
     CHECK_GT(p2p_size, 0);
-    CHECK_EQ(static_cast<int64_t>(a2a_size) * p2p_size,
-             context_parallel_size)
+    CHECK_EQ(static_cast<int64_t>(a2a_size) * p2p_size, context_parallel_size)
         << "A2A size * P2P size must equal context_parallel";
     hierarchical_context_parallel_sizes_ = {a2a_size, p2p_size};
   } else {

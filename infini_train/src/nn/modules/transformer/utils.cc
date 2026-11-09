@@ -1,5 +1,7 @@
 #include "infini_train/include/nn/modules/transformer/utils.h"
 
+#include <cmath>
+#include <limits>
 #include <memory>
 #include <ostream>
 #include <tuple>
@@ -78,5 +80,37 @@ ApplyRotaryEmbedding(const std::shared_ptr<Tensor> &xq,
   };
 
   return {rotate(xq), rotate(xk)};
+}
+
+std::shared_ptr<Tensor> RepeatKVHeads(const std::shared_ptr<Tensor> &x,
+                                      int64_t n_rep) {
+  if (n_rep == 1) {
+    return x;
+  }
+
+  const auto &shape = x->Dims();
+  const int64_t B = shape[0], H = shape[1], T = shape[2], D = shape[3];
+  return x->View({B, H, 1, T, D})
+      ->RepeatInterleave(n_rep, 2)
+      ->Contiguous()
+      ->View({B, H * n_rep, T, D});
+}
+
+std::shared_ptr<Tensor> ScaledDotProductAttention(
+    const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
+    const std::shared_ptr<Tensor> &v, int64_t num_gqa_groups,
+    const std::shared_ptr<Tensor> &mask) {
+  // TODO(zbl): Replace the materialized GQA repeat with a kernel that consumes KV
+  //            heads directly.
+  auto k_for_attn = RepeatKVHeads(k, num_gqa_groups);
+  auto v_for_attn = RepeatKVHeads(v, num_gqa_groups);
+  const float scale = static_cast<float>(
+      1.0 / std::sqrt(static_cast<double>(q->Dims().back())));
+  auto scores = q->Matmul(k_for_attn->Transpose(-2, -1)) * scale;
+  if (mask) {
+    scores = scores->MaskedFill(mask, std::numeric_limits<float>::lowest());
+  }
+  auto probs = nn::function::Softmax(scores, -1);
+  return probs->Matmul(v_for_attn);
 }
 }  // namespace infini_train

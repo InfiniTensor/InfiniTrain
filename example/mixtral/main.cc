@@ -41,6 +41,7 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
