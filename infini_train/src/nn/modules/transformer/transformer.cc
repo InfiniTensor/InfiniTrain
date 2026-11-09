@@ -23,6 +23,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/modules/transformer/mla_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
@@ -172,7 +173,11 @@ TransformerLayer::TransformerLayer(const nn::TransformerConfig &config)
       LOG(FATAL) << "Unsupported norm type";
   }
 
-  modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+  if (config.multi_latent_attention) {
+    modules_[kAttnLayerName] = std::make_shared<MLASelfAttention>(config);
+  } else {
+    modules_[kAttnLayerName] = std::make_shared<CausalSelfAttention>(config);
+  }
   if (config.ffn_type == FFNType::kMoE) {
     modules_[kMlpLayerName] = std::make_shared<moe::MoELayer>(config);
   } else {
@@ -235,7 +240,10 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(
 
     // Init freqs_cis on device only once
     if (buffers_[kFreqsCisName] == nullptr) {
-      int64_t head_dim = config_.n_embd / config_.n_head;
+      int64_t head_dim =
+          config_.multi_latent_attention && config_.qk_rope_head_dim > 0
+              ? config_.qk_rope_head_dim
+              : config_.n_embd / config_.n_head;
       autograd::NoGradGuard no_grad;
       buffers_[kFreqsCisName] = PrecomputeFreqsCis(
           head_dim, config_.block_size * 2, config_.rope_theta,
