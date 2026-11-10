@@ -218,6 +218,40 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
     SetupContext(compute_inputs, output_tensors);
   }
 
+  // 034：结构性收敛——lower-precision 算子（当前 Linear/Matmul）的输出回转为 FP32，使低精度
+  // 只作用于 GEMM 内部计算，避免后续算子（如 LayerNorm）的反向收到 bf16 grad 而触发同-dtype
+  // 守卫（累计已在 031/032/033 三处按站点修过）。闸门必须是精确条件：autocast 启用 + 当前
+  // type_ 属于 kLowerPrecisionOps + 输出非空 + 输出 dtype 恰为 autocast dtype；FP32 运行、
+  // 其它 dtype、其它 policy、未启用 autocast 一律保留原 shared_ptr（对象身份与既有 FP32 数值
+  // 路径不变）。注意：GEMM 输出仍是 bf16 舍入值，只是以 FP32 容器承载，不是精度提升。
+  // 位置：SetupContext 之后、SaveVariables 之前，故保存变量、post-hook、不可微标记与
+  // requires_grad/grad_fn/next_functions wiring 都作用在替换后的输出上。
+  if (tls_autocast_context.enabled) {
+    const std::string_view op_name = GetBaseOpName(type_);
+    bool is_lower_precision = false;
+    for (const auto &name : kLowerPrecisionOps) {
+      if (op_name == name) {
+        is_lower_precision = true;
+        break;
+      }
+    }
+    if (is_lower_precision) {
+      for (auto &output : output_tensors) {
+        if (!output ||
+            output->Dtype() != tls_autocast_context.autocast_dtype) {
+          continue;
+        }
+        const bool was_non_differentiable = ctx_.IsNonDifferentiable(output);
+        auto converted =
+            std::make_shared<Tensor>(output->To(DataType::kFLOAT32));
+        if (was_non_differentiable) {
+          ctx_.MarkNonDifferentiable({converted});
+        }
+        output = converted;
+      }
+    }
+  }
+
   if (record_context) {
     ctx_.SaveVariables(output_tensors);
   } else {
