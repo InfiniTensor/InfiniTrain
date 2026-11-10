@@ -60,7 +60,7 @@ inline constexpr std::array kFP32Ops = {
     "Exp",        "Log",          "Sqrt",
     "Reciprocal", "Rsqrt",        "Prod",
     "Pow",        "CrossEntropy", "VocabParallelCrossEntropy",
-    "Layernorm"};
+    "LayerNorm"};
 
 // Mapping from operation names to their cast policies. This is the primary
 // construct that is used in autocasting. The op names should match the ones
@@ -93,7 +93,7 @@ inline const std::unordered_map<std::string_view, CastPolicy> kOpCastPolicyMap =
         {"Pow", CastPolicy::kFP32},
         {"CrossEntropy", CastPolicy::kFP32},
         {"VocabParallelCrossEntropy", CastPolicy::kFP32},
-        {"Layernorm", CastPolicy::kFP32},
+        {"LayerNorm", CastPolicy::kFP32},
 };
 
 inline DataType GetDefaultAutocastDtype(Device::DeviceType device_type) {
