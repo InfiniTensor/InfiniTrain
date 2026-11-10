@@ -5,6 +5,20 @@
 
 namespace infini_train::nn::parallel {
 
+enum class ContextParallelCommType {
+  kAllGather,
+  kP2P,
+  kA2A,
+  kA2AP2P,
+};
+
+struct ContextParallelConfig {
+  int size = 1;
+  ContextParallelCommType comm_type = ContextParallelCommType::kP2P;
+  std::string hierarchical_sizes;
+  std::string attention_layout = "zigzag";
+};
+
 // Model-parallel topology and communication policy. Runtime-only process
 // information, such as threads per process, remains owned by GlobalEnv.
 struct ModelParallelConfig {
@@ -37,10 +51,7 @@ struct ModelParallelConfig {
   bool tp_comm_overlap_disable_qkv = false;
   bool tp_comm_overlap_disable_fc1 = false;
 
-  int context_model_parallel_size = 1;
-  std::string context_parallel_comm_type = "p2p";
-  std::string hierarchical_context_parallel_sizes;
-  std::string attention_cp_layout = "zigzag";
+  ContextParallelConfig context_parallel;
 };
 
 }  // namespace infini_train::nn::parallel

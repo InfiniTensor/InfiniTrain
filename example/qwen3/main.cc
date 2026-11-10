@@ -313,7 +313,8 @@ void Train(const nn::parallel::Rank &rank) {
           GetContextParallelGroupRanks(rank.GlobalRank()));
       cp_rank = cp_pg->GetGroupRank(rank.GlobalRank());
       nn::parallel::cp_rank = cp_rank;
-      if (global::GetContextParallelCommType() == "a2a+p2p") {
+      if (global::GetContextParallelCommType() ==
+          global::ContextParallelCommType::kA2AP2P) {
         for (int level = 0; level < 2; ++level) {
           pg_factory->GetOrCreate(
               GetHierarchicalContextParallelProcessGroupName(rank.GlobalRank(),
@@ -818,11 +819,13 @@ int main(int argc, char *argv[]) {
       FLAGS_tp_comm_overlap_disable_qkv;
   model_parallel_config.tp_comm_overlap_disable_fc1 =
       FLAGS_tp_comm_overlap_disable_fc1;
-  model_parallel_config.context_model_parallel_size = FLAGS_context_parallel;
-  model_parallel_config.context_parallel_comm_type = FLAGS_cp_comm_type;
-  model_parallel_config.hierarchical_context_parallel_sizes =
+  model_parallel_config.context_parallel.size = FLAGS_context_parallel;
+  model_parallel_config.context_parallel.comm_type =
+      nn::parallel::global::ParseContextParallelCommType(FLAGS_cp_comm_type);
+  model_parallel_config.context_parallel.hierarchical_sizes =
       FLAGS_hierarchical_context_parallel_sizes;
-  model_parallel_config.attention_cp_layout = FLAGS_attention_cp_layout;
+  model_parallel_config.context_parallel.attention_layout =
+      FLAGS_attention_cp_layout;
   model_parallel_config.expert_tensor_parallel_size = 1;
   nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
                                    model_parallel_config);

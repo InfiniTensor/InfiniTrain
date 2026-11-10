@@ -100,8 +100,8 @@ std::shared_ptr<Tensor> ScaledDotProductAttention(
     const std::shared_ptr<Tensor> &q, const std::shared_ptr<Tensor> &k,
     const std::shared_ptr<Tensor> &v, int64_t num_gqa_groups,
     const std::shared_ptr<Tensor> &mask) {
-  // TODO(zbl): Replace the materialized GQA repeat with a kernel that consumes KV
-  //            heads directly.
+  // TODO(zbl): Replace the materialized GQA repeat with a kernel that consumes
+  //            KV heads directly.
   auto k_for_attn = RepeatKVHeads(k, num_gqa_groups);
   auto v_for_attn = RepeatKVHeads(v, num_gqa_groups);
   const float scale = static_cast<float>(

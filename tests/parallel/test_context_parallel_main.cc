@@ -21,11 +21,14 @@ int main(int argc, char **argv) {
   setenv("LOCAL_RANK", "0", 1);
   infini_train::nn::parallel::ModelParallelConfig model_parallel_config;
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
-  model_parallel_config.context_model_parallel_size = FLAGS_context_parallel;
-  model_parallel_config.context_parallel_comm_type = FLAGS_cp_comm_type;
-  model_parallel_config.hierarchical_context_parallel_sizes =
+  model_parallel_config.context_parallel.size = FLAGS_context_parallel;
+  model_parallel_config.context_parallel.comm_type =
+      infini_train::nn::parallel::global::ParseContextParallelCommType(
+          FLAGS_cp_comm_type);
+  model_parallel_config.context_parallel.hierarchical_sizes =
       FLAGS_hierarchical_context_parallel_sizes;
-  model_parallel_config.attention_cp_layout = FLAGS_attention_cp_layout;
+  model_parallel_config.context_parallel.attention_layout =
+      FLAGS_attention_cp_layout;
   infini_train::nn::parallel::global::InitAllEnv(
       FLAGS_context_parallel * FLAGS_tensor_parallel, model_parallel_config);
   return RUN_ALL_TESTS();

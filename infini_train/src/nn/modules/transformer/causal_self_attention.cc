@@ -108,6 +108,28 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
     n_kv_head_ = n_head_;
     n_rep_ = 1;
   }
+
+  // Validate CP attn heads requirements
+  const int cp_size = parallel::global::GetContextParallelSize();
+  const int64_t local_kv_heads = n_kv_head_ / tp_world_size;
+  CHECK_EQ(local_n_head_ % local_kv_heads, 0)
+      << "Local query heads must be divisible by local KV heads";
+  int64_t head_shards = 0;
+  const auto comm_type = parallel::global::GetContextParallelCommType();
+  if (comm_type == parallel::ContextParallelCommType::kA2A) {
+    head_shards = cp_size;
+  } else if (comm_type == parallel::ContextParallelCommType::kA2AP2P) {
+    const auto &hierarchy =
+        parallel::global::GetHierarchicalContextParallelSizes();
+    CHECK_EQ(hierarchy.size(), 2);
+    head_shards = hierarchy[0];
+  }
+  if (head_shards > 1) {
+    CHECK_EQ(local_n_head_ % head_shards, 0)
+        << "A2A CP requires local query heads divisible by its subgroup size";
+    CHECK_EQ(local_kv_heads % head_shards, 0)
+        << "A2A CP requires local KV heads divisible by its subgroup size";
+  }
 }
 
 ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
