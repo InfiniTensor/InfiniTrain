@@ -11,6 +11,9 @@
 
 namespace infini_train::nn::parallel::global {
 
+using ContextParallelCommType =
+    ::infini_train::nn::parallel::ContextParallelCommType;
+
 extern thread_local int thread_global_rank;
 
 // TP and DP are view-local axes. In the expert rank generator they represent
@@ -62,6 +65,8 @@ class RankGenerator {
   std::array<int, kAxisCount> strides_{1, 1, 1, 1, 1};
 };
 
+ContextParallelCommType ParseContextParallelCommType(const std::string &value);
+
 class GlobalEnv {
  public:
   static GlobalEnv &Instance();
@@ -90,7 +95,7 @@ class GlobalEnv {
   bool sequence_parallel_enabled() const;
 
   int context_parallel_size() const;
-  const std::string &context_parallel_comm_type() const;
+  ContextParallelCommType context_parallel_comm_type() const;
   const std::string &attention_cp_layout() const;
   const std::vector<int> &hierarchical_context_parallel_sizes() const;
 
@@ -127,8 +132,7 @@ class GlobalEnv {
 
   ModelParallelConfig model_parallel_config_;
 
-  int context_parallel_size_ = 1;
-  std::string context_parallel_comm_type_ = "p2p";
+  ContextParallelConfig context_parallel_config_;
   std::string attention_cp_layout_ = "zigzag";
   std::vector<int> hierarchical_context_parallel_sizes_;
 
@@ -178,9 +182,9 @@ inline bool GetSequenceParallelEnabled() {
   return GlobalEnv::Instance().sequence_parallel_enabled();
 }
 inline int GetContextParallelSize() {
-  return GlobalEnv::Instance().context_parallel_size();
+  return GlobalEnv::Instance().model_parallel_config().context_parallel.size;
 }
-inline const std::string &GetContextParallelCommType() {
+inline ContextParallelCommType GetContextParallelCommType() {
   return GlobalEnv::Instance().context_parallel_comm_type();
 }
 inline const std::string &GetAttentionCPLayout() {

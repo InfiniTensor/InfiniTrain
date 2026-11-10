@@ -302,6 +302,22 @@ GlobalEnv &GlobalEnv::Instance() {
   return instance;
 }
 
+ContextParallelCommType ParseContextParallelCommType(const std::string &value) {
+  if (value == "p2p") {
+    return ContextParallelCommType::kP2P;
+  }
+  if (value == "all_gather") {
+    return ContextParallelCommType::kAllGather;
+  }
+  if (value == "a2a") {
+    return ContextParallelCommType::kA2A;
+  }
+  if (value == "a2a+p2p") {
+    return ContextParallelCommType::kA2AP2P;
+  }
+  LOG(FATAL) << "Unsupported CP communication type: " << value;
+}
+
 void GlobalEnv::Init(int nthread_per_process,
                      const ModelParallelConfig &config) {
   const int tensor_parallel_size = config.tensor_model_parallel_size;
@@ -310,12 +326,15 @@ void GlobalEnv::Init(int nthread_per_process,
       config.virtual_pipeline_model_parallel_size;
   const int expert_parallel_size = config.expert_model_parallel_size;
   const auto expert_tensor_parallel_size = config.expert_tensor_parallel_size;
-  const int context_parallel_size = config.context_model_parallel_size;
-  const std::string &context_parallel_comm_type =
-      config.context_parallel_comm_type;
+  const ContextParallelConfig &context_parallel_config =
+      config.context_parallel;
+  const int context_parallel_size = context_parallel_config.size;
+  const ContextParallelCommType context_parallel_comm_type =
+      context_parallel_config.comm_type;
   const std::string &hierarchical_context_parallel_sizes =
-      config.hierarchical_context_parallel_sizes;
-  const std::string &attention_cp_layout = config.attention_cp_layout;
+      context_parallel_config.hierarchical_sizes;
+  const std::string &attention_cp_layout =
+      context_parallel_config.attention_layout;
   std::lock_guard<std::mutex> lock(mutex_);
 
   CHECK(!initialized_) << "Repeated initialization of GlobalEnv!";
@@ -349,17 +368,11 @@ void GlobalEnv::Init(int nthread_per_process,
       << "Expert Tensor Parallel size must be >= 1";
 
   CHECK_GE(context_parallel_size, 1) << "Context Parallel size must be >= 1";
-  context_parallel_size_ = context_parallel_size;
-  context_parallel_comm_type_ = context_parallel_comm_type;
+  context_parallel_config_ = context_parallel_config;
   CHECK(attention_cp_layout == "contiguous" || attention_cp_layout == "zigzag")
       << "Unsupported attention CP layout: " << attention_cp_layout;
   attention_cp_layout_ = attention_cp_layout;
-  CHECK(context_parallel_comm_type == "p2p" ||
-        context_parallel_comm_type == "all_gather" ||
-        context_parallel_comm_type == "a2a" ||
-        context_parallel_comm_type == "a2a+p2p")
-      << "Unsupported CP communication type: " << context_parallel_comm_type;
-  if (context_parallel_comm_type == "a2a+p2p") {
+  if (context_parallel_comm_type == ContextParallelCommType::kA2AP2P) {
     const auto separator = hierarchical_context_parallel_sizes.find(',');
     CHECK(separator != std::string::npos)
         << "hierarchical_context_parallel_sizes must be A,P";
@@ -490,12 +503,12 @@ bool GlobalEnv::sequence_parallel_enabled() const {
 
 int GlobalEnv::context_parallel_size() const {
   CHECK(initialized_) << "GlobalEnv is not initialized!";
-  return context_parallel_size_;
+  return context_parallel_config_.size;
 }
 
-const std::string &GlobalEnv::context_parallel_comm_type() const {
+ContextParallelCommType GlobalEnv::context_parallel_comm_type() const {
   CHECK(initialized_) << "GlobalEnv is not initialized!";
-  return context_parallel_comm_type_;
+  return context_parallel_config_.comm_type;
 }
 
 const std::string &GlobalEnv::attention_cp_layout() const {

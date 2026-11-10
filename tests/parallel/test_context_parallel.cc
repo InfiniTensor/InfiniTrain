@@ -210,7 +210,8 @@ void CheckAttentionAgainstDoubleReference(bool bf16, bool mixed_inputs = false,
   for (int rank = 0; rank < world; ++rank) {
     factory->GetOrCreate(parallel::GetContextParallelProcessGroupName(rank),
                          parallel::GetContextParallelGroupRanks(rank));
-    if (global::GetContextParallelCommType() == "a2a+p2p") {
+    if (global::GetContextParallelCommType() ==
+        global::ContextParallelCommType::kA2AP2P) {
       for (int level = 0; level < 2; ++level) {
         factory->GetOrCreate(
             parallel::GetHierarchicalContextParallelProcessGroupName(rank,
