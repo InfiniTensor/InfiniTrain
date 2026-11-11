@@ -150,6 +150,9 @@ DEFINE_uint32(recompute_num_layers, 0,
 // precision
 DEFINE_string(dtype, "float32",
               "precision used in training (float32/bfloat16)");
+DEFINE_string(pipeline_dtype, "float32",
+              "dtype used for pipeline parallel communication "
+              "(float32/bfloat16)");
 DEFINE_uint32(save_interval, 0,
               "save checkpoint every N steps; 0 disables saving");
 DEFINE_string(load, "", "checkpoint directory to resume from");
@@ -178,8 +181,6 @@ using namespace infini_train;
 namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels = {"llama3"};
-constexpr char kDtypeFP32[] = "float32";
-constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles = {
     "none", "constant", "linear", "cosine", "inverse-square-root"};
 
@@ -342,15 +343,7 @@ void Train(const nn::parallel::Rank &rank) {
 
   LOG(INFO) << "Rank " << rank.GlobalRank() << ": Model loaded to device.";
 
-  DataType dtype;
-  if (FLAGS_dtype == kDtypeFP32) {
-    dtype = DataType::kFLOAT32;
-  } else if (FLAGS_dtype == kDtypeBF16) {
-    dtype = DataType::kBFLOAT16;
-  } else {
-    LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype
-               << " not supported.";
-  }
+  const DataType dtype = ParseDtype(FLAGS_dtype);
 
   auto num_micro_batches =
       FLAGS_total_batch_size /
@@ -735,6 +728,7 @@ int main(int argc, char *argv[]) {
   auto precision_config =
       utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
   nn::parallel::ModelParallelConfig model_parallel_config;
+  model_parallel_config.pipeline_dtype = ParseDtype(FLAGS_pipeline_dtype);
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
   model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
   model_parallel_config.virtual_pipeline_model_parallel_size =

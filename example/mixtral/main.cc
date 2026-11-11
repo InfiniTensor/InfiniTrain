@@ -41,6 +41,7 @@
 #include "infini_train/include/nn/parallel/ddp/distributed_data_parallel_config.h"
 #include "infini_train/include/nn/parallel/ddp/distributed_optimizer.h"
 #include "infini_train/include/nn/parallel/global.h"
+#include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/pp/pipeline_parallel.h"
 #include "infini_train/include/nn/parallel/process_group.h"
 #include "infini_train/include/nn/parallel/rank.h"
@@ -90,6 +91,9 @@ DEFINE_uint32(expert_tensor_parallel, 1,
 // precision
 DEFINE_string(dtype, "float32",
               "precision used in training (float32/bfloat16)");
+DEFINE_string(pipeline_dtype, "float32",
+              "dtype used for pipeline parallel communication "
+              "(float32/bfloat16)");
 // logging
 DEFINE_uint32(log_interval, 1,
               "Print train loss every N steps. 0 disables step loss logging.");
@@ -99,9 +103,6 @@ DEFINE_bool(print_timing, false,
 using namespace infini_train;
 
 namespace {
-
-constexpr char kDtypeFP32[] = "float32";
-constexpr char kDtypeBF16[] = "bfloat16";
 
 void ValidateRuntimeFlags(const nn::TransformerConfig &config) {
   CHECK(!FLAGS_input_bin.empty()) << "Mixtral training requires --input_bin";
@@ -203,15 +204,7 @@ void Train(const nn::parallel::Rank &rank) {
 
   auto loss_fn = std::make_shared<nn::CrossEntropyLoss>();
   loss_fn->To(device);
-  DataType dtype;
-  if (FLAGS_dtype == kDtypeFP32) {
-    dtype = DataType::kFLOAT32;
-  } else if (FLAGS_dtype == kDtypeBF16) {
-    dtype = DataType::kBFLOAT16;
-  } else {
-    LOG(FATAL) << "Rank " << rank.GlobalRank() << ": Datatype " << FLAGS_dtype
-               << " not supported.";
-  }
+  const DataType dtype = ParseDtype(FLAGS_dtype);
 
   if (pp_world_size > 1) {
     const std::vector<std::vector<int64_t>> recv_shapes{
@@ -393,11 +386,18 @@ int main(int argc, char *argv[]) {
   CHECK_GT(FLAGS_virtual_pipeline_parallel, 0);
   CHECK_GT(FLAGS_expert_parallel, 0);
 
-  nn::parallel::global::InitAllEnv(
-      FLAGS_nthread_per_process, FLAGS_tensor_parallel,
-      /*sequence_parallel_enabled=*/false, FLAGS_pipeline_parallel,
-      FLAGS_virtual_pipeline_parallel, FLAGS_expert_parallel,
-      FLAGS_expert_tensor_parallel);
+  nn::parallel::ModelParallelConfig model_parallel_config;
+  model_parallel_config.pipeline_dtype = ParseDtype(FLAGS_pipeline_dtype);
+  model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
+  model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
+  model_parallel_config.virtual_pipeline_model_parallel_size =
+      FLAGS_virtual_pipeline_parallel;
+  model_parallel_config.expert_model_parallel_size = FLAGS_expert_parallel;
+  model_parallel_config.expert_tensor_parallel_size =
+      FLAGS_expert_tensor_parallel;
+
+  nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
+                                   model_parallel_config);
 
   LOG(INFO) << nn::parallel::global::ProcessGroupOverview(
       nn::parallel::global::GetDenseRankGenerator(),
