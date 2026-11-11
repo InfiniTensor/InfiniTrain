@@ -50,10 +50,6 @@ class ISend : public autograd::Function {
   const std::vector<std::vector<int64_t>> &shapes_;
   // Dtype shared by activation and gradient payloads on the pipeline wire.
   DataType pipeline_dtype_ = DataType::kFLOAT32;
-  // Forward tensors converted to the pipeline dtype before sending.
-  std::vector<std::shared_ptr<Tensor>> wire_tensors_;
-  // Backward receive buffers allocated with the pipeline dtype.
-  std::vector<std::shared_ptr<Tensor>> wire_grad_tensors_;
   // Original forward input dtypes used to restore received input gradients.
   std::vector<DataType> input_dtypes_;
 };
@@ -86,8 +82,6 @@ class IRecv : public autograd::Function {
   DataType pipeline_dtype_ = DataType::kFLOAT32;
   // Number of forward outputs expected by backward.
   size_t output_count_ = 0;
-  // Backward gradients converted to the pipeline dtype before sending.
-  std::vector<std::shared_ptr<Tensor>> wire_grad_tensors_;
 };
 
 std::vector<std::shared_ptr<Tensor>> ISend::Forward(
@@ -101,24 +95,24 @@ std::vector<std::shared_ptr<Tensor>> ISend::Forward(
   CHECK(input != nullptr);
   input_device_ = input->GetDevice();
 
-  wire_tensors_.clear();
-  wire_tensors_.reserve(input_tensors.size());
+  std::vector<std::shared_ptr<Tensor>> wire_tensors;
+  wire_tensors.reserve(input_tensors.size());
   for (const auto &tensor : input_tensors) {
     CHECK(tensor != nullptr);
     if (tensor->Dtype() == pipeline_dtype_) {
-      wire_tensors_.push_back(tensor);
+      wire_tensors.push_back(tensor);
     } else {
-      wire_tensors_.push_back(
+      wire_tensors.push_back(
           std::make_shared<Tensor>(tensor->To(pipeline_dtype_)));
     }
-    CHECK(wire_tensors_.back()->Dtype() == pipeline_dtype_);
+    CHECK(wire_tensors.back()->Dtype() == pipeline_dtype_);
   }
 
   auto pp_group = ProcessGroupFactory::Instance(input_device_.type())
                       ->Get(GetPipelineParallelProcessGroupName(
                           input_device_.Rank().GlobalRank()));
 
-  pp_group->Send(wire_tensors_, peer_rank_, false);
+  pp_group->Send(wire_tensors, peer_rank_, false);
 
   return input_tensors;
 }
@@ -136,28 +130,28 @@ void ISend::SetupContext(
 
 std::vector<std::shared_ptr<Tensor>> ISend::Backward(
     const std::vector<std::shared_ptr<Tensor>> &grad_outputs) {
-  wire_grad_tensors_.clear();
+  std::vector<std::shared_ptr<Tensor>> wire_grad_tensors;
   CHECK_EQ(input_dtypes_.size(), shapes_.size());
   for (size_t shape_i = 0; shape_i < shapes_.size(); ++shape_i) {
     auto r_tensor = std::make_shared<Tensor>(shapes_[shape_i], pipeline_dtype_,
                                              input_device_);
-    wire_grad_tensors_.push_back(r_tensor);
+    wire_grad_tensors.push_back(r_tensor);
   }
 
   auto pp_group = ProcessGroupFactory::Instance(input_device_.type())
                       ->Get(GetPipelineParallelProcessGroupName(
                           input_device_.Rank().GlobalRank()));
 
-  pp_group->Recv(wire_grad_tensors_, peer_rank_, false);
+  pp_group->Recv(wire_grad_tensors, peer_rank_, false);
 
   std::vector<std::shared_ptr<Tensor>> input_grads;
-  input_grads.reserve(wire_grad_tensors_.size());
-  for (size_t i = 0; i < wire_grad_tensors_.size(); ++i) {
-    if (wire_grad_tensors_[i]->Dtype() == input_dtypes_[i]) {
-      input_grads.push_back(wire_grad_tensors_[i]);
+  input_grads.reserve(wire_grad_tensors.size());
+  for (size_t i = 0; i < wire_grad_tensors.size(); ++i) {
+    if (wire_grad_tensors[i]->Dtype() == input_dtypes_[i]) {
+      input_grads.push_back(wire_grad_tensors[i]);
     } else {
-      input_grads.push_back(std::make_shared<Tensor>(
-          wire_grad_tensors_[i]->To(input_dtypes_[i])));
+      input_grads.push_back(
+          std::make_shared<Tensor>(wire_grad_tensors[i]->To(input_dtypes_[i])));
     }
   }
   return input_grads;
@@ -189,16 +183,16 @@ std::vector<std::shared_ptr<Tensor>> IRecv::Backward(
                           cur_device_.Rank().GlobalRank()));
 
   CHECK_EQ(grad_outputs.size(), output_count_);
-  wire_grad_tensors_ = grad_outputs;
-  for (size_t i = 0; i < wire_grad_tensors_.size(); ++i) {
-    if (wire_grad_tensors_[i]->Dtype() != pipeline_dtype_) {
-      wire_grad_tensors_[i] =
-          std::make_shared<Tensor>(wire_grad_tensors_[i]->To(pipeline_dtype_));
+  auto wire_grad_tensors = grad_outputs;
+  for (size_t i = 0; i < wire_grad_tensors.size(); ++i) {
+    if (wire_grad_tensors[i]->Dtype() != pipeline_dtype_) {
+      wire_grad_tensors[i] =
+          std::make_shared<Tensor>(wire_grad_tensors[i]->To(pipeline_dtype_));
     }
   }
-  pp_group->Send(wire_grad_tensors_, peer_rank_, false);
+  pp_group->Send(wire_grad_tensors, peer_rank_, false);
 
-  return wire_grad_tensors_;
+  return wire_grad_tensors;
 }
 }  // namespace functions
 

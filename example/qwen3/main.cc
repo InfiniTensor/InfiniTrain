@@ -151,6 +151,9 @@ DEFINE_uint32(recompute_num_layers, 0,
 // precision
 DEFINE_string(dtype, "float32",
               "precision used in training (float32/bfloat16)");
+DEFINE_string(pipeline_dtype, "float32",
+              "dtype used for pipeline parallel communication "
+              "(float32/bfloat16)");
 DEFINE_uint32(save_interval, 0,
               "save checkpoint every N steps; 0 disables saving");
 DEFINE_string(load, "", "checkpoint directory to resume from");
@@ -179,21 +182,9 @@ using namespace infini_train;
 namespace {
 // validation
 const std::unordered_set<std::string> kSupportedModels = {"qwen3"};
-constexpr char kDtypeFP32[] = "float32";
-constexpr char kDtypeBF16[] = "bfloat16";
 const std::unordered_set<std::string> kSupportedLRDecayStyles = {
     "none", "constant", "linear", "cosine", "inverse-square-root"};
 
-DataType ParseDtype(const std::string &dtype) {
-  if (dtype == kDtypeFP32) {
-    return DataType::kFLOAT32;
-  }
-  if (dtype == kDtypeBF16) {
-    return DataType::kBFLOAT16;
-  }
-  LOG(FATAL) << "Datatype " << dtype << " not supported.";
-  return DataType::kFLOAT32;
-}
 }  // namespace
 
 DEFINE_validator(model, [](const char *, const std::string &value) {
@@ -736,7 +727,7 @@ int main(int argc, char *argv[]) {
   auto precision_config =
       utils::PrecisionCheckConfig::Parse(FLAGS_precision_check);
   nn::parallel::ModelParallelConfig model_parallel_config;
-  model_parallel_config.pipeline_dtype = ParseDtype(FLAGS_dtype);
+  model_parallel_config.pipeline_dtype = ParseDtype(FLAGS_pipeline_dtype);
   model_parallel_config.tensor_model_parallel_size = FLAGS_tensor_parallel;
   model_parallel_config.pipeline_model_parallel_size = FLAGS_pipeline_parallel;
   model_parallel_config.virtual_pipeline_model_parallel_size =
