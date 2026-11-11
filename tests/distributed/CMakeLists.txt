@@ -23,3 +23,14 @@ set_tests_properties(RankTest.MultiNodeSingleProcessIsParallel
     LABELS cpu
     TIMEOUT 10
 )
+
+add_test(
+  NAME MultinodeSshLauncherTest
+  COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/test_launch_multinode_ssh.sh
+)
+
+set_tests_properties(MultinodeSshLauncherTest
+  PROPERTIES
+    LABELS cpu
+    TIMEOUT 60
+)
