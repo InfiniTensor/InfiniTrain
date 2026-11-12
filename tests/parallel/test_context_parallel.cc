@@ -123,11 +123,11 @@ TEST(ContextParallelLayoutTest, CausalMaskUsesGlobalPositions) {
     const auto positions = LocalPositions(rank, full_t);
     auto mask = parallel::MakeCausalMaskAlongCPRegionFunc(local_t, Device());
     ASSERT_EQ(mask->Dims(), (std::vector<int64_t>{1, 1, local_t, full_t}));
-    ASSERT_EQ(mask->Dtype(), DataType::kBOOL);
-    const auto *actual = static_cast<const uint8_t *>(mask->DataPtr());
+    ASSERT_EQ(mask->Dtype(), DataType::kFLOAT32);
+    const auto *actual = static_cast<const float *>(mask->DataPtr());
     for (int64_t i = 0; i < local_t; ++i) {
       for (int64_t k = 0; k < full_t; ++k) {
-        EXPECT_EQ(actual[i * full_t + k], positions[i] < k ? 1 : 0);
+        EXPECT_FLOAT_EQ(actual[i * full_t + k], positions[i] < k ? 1.0f : 0.0f);
       }
     }
   }
