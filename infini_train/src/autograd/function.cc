@@ -1,6 +1,8 @@
 #include "infini_train/include/autograd/function.h"
 
+#include <array>
 #include <ostream>
+#include <string_view>
 
 #include "glog/logging.h"
 
@@ -9,6 +11,7 @@
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/common/hook.h"  // IWYU pragma: keep
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -218,14 +221,18 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
     SetupContext(compute_inputs, output_tensors);
   }
 
-  // 034：结构性收敛——lower-precision 算子（当前 Linear/Matmul）的输出回转为 FP32，使低精度
-  // 只作用于 GEMM 内部计算，避免后续算子（如 LayerNorm）的反向收到 bf16 grad 而触发同-dtype
-  // 守卫（累计已在 031/032/033 三处按站点修过）。闸门必须是精确条件：autocast 启用 + 当前
-  // type_ 属于 kLowerPrecisionOps + 输出非空 + 输出 dtype 恰为 autocast dtype；FP32 运行、
-  // 其它 dtype、其它 policy、未启用 autocast 一律保留原 shared_ptr（对象身份与既有 FP32 数值
-  // 路径不变）。注意：GEMM 输出仍是 bf16 舍入值，只是以 FP32 容器承载，不是精度提升。
-  // 位置：SetupContext 之后、SaveVariables 之前，故保存变量、post-hook、不可微标记与
-  // requires_grad/grad_fn/next_functions wiring 都作用在替换后的输出上。
+  // Structural convergence: lower-precision operators (Linear/Matmul today)
+  // return their output as FP32, so reduced precision stays confined to the
+  // GEMM body and consumers such as LayerNorm never receive a bf16 gradient
+  // that violates their same-dtype guard. The gate is exact: autocast enabled,
+  // type_ in kLowerPrecisionOps, a non-null output, and output dtype equal to
+  // the autocast dtype; FP32 runs, other dtypes/policies and disabled autocast
+  // keep the original shared_ptr, so object identity and the existing FP32
+  // numerics are unchanged. The GEMM output is still bf16-rounded, only carried
+  // in an FP32 container; this is not an accuracy improvement. Placement: after
+  // SetupContext and before SaveVariables, so saved variables, post-hooks, the
+  // non-differentiable mark and the grad_fn wiring all bind to the replaced
+  // tensor.
   if (tls_autocast_context.enabled) {
     const std::string_view op_name = GetBaseOpName(type_);
     bool is_lower_precision = false;
@@ -237,8 +244,7 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
     }
     if (is_lower_precision) {
       for (auto &output : output_tensors) {
-        if (!output ||
-            output->Dtype() != tls_autocast_context.autocast_dtype) {
+        if (!output || output->Dtype() != tls_autocast_context.autocast_dtype) {
           continue;
         }
         const bool was_non_differentiable = ctx_.IsNonDifferentiable(output);
