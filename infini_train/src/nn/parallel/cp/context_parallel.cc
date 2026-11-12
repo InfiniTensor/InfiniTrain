@@ -69,8 +69,7 @@ std::shared_ptr<Tensor> MakeCausalMaskAlongCPRegionFunc(int64_t local_t,
   std::vector<std::shared_ptr<Tensor>> mask_rows;
   mask_rows.reserve(local_t);
   for (const int64_t query_position : query_positions) {
-    mask_rows.push_back(std::make_shared<Tensor>(
-        keys->Gt(query_position)->To(DataType::kBOOL)));
+    mask_rows.push_back(keys->Gt(query_position));
   }
   return nn::function::Concat(mask_rows, 0)->View({1, 1, local_t, full_t});
 }
