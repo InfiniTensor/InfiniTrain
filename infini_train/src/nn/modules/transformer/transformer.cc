@@ -16,6 +16,7 @@
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/init.h"
 #include "infini_train/include/nn/modules/container.h"
 #include "infini_train/include/nn/modules/module.h"
@@ -254,7 +255,14 @@ std::vector<std::shared_ptr<Tensor>> TransformerChunk::Forward(
     auto freqs_view = nn::parallel::SliceAlongCPRegionFunc(
         buffers_[kFreqsCisName]->Slice(0, 0, full_t, 1), 0);
 
-    auto mask = nn::parallel::MakeCausalMaskAlongCPRegionFunc(local_t, device);
+    std::shared_ptr<Tensor> mask;
+    if (nn::parallel::global::GetContextParallelSize() == 1) {
+      auto ones = std::make_shared<Tensor>(
+          nn::function::Ones({local_t, local_t})->To(device));
+      mask = nn::function::Triu(ones, 1)->View({1, 1, local_t, local_t});
+    } else {
+      mask = nn::parallel::MakeCausalMaskAlongCPRegionFunc(local_t, device);
+    }
 
     std::shared_ptr<Tensor> start_pos_ptr = nullptr;
 

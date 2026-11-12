@@ -49,18 +49,6 @@ void Gemm(Device device, GemmParams p) {
               ->GetBlasHandle(device))
           ->cublas_handle();
 
-  // COMPUTE_32F alone still permits reduced-precision intermediate reductions
-  // for FP16/BF16 outputs. Keep partial sums in FP32 as well.
-  // PyTorch comparisons should set both:
-  //   torch.backends.cuda.matmul.allow_fp16_reduced_precision_reduction = False
-  //   torch.backends.cuda.matmul.allow_bf16_reduced_precision_reduction = False
-  CUBLAS_CHECK(cublasSetMathMode(
-      blas_handle, CUBLAS_MATH_DISALLOW_REDUCED_PRECISION_REDUCTION));
-  // FIXME: Allow workspace-backed algorithms once their accumulation accuracy
-  // is controlled independently of the microbatch/sequence partition. Bind the
-  // workspace after GetBlasHandle(), whose cublasSetStream resets it.
-  CUBLAS_CHECK(cublasSetWorkspace(blas_handle, nullptr, 0));
-
   if (p.batch_count == 1) {
     // strides are unused in the non-batched path; assert they are left at 0
     // to catch accidental misuse early.
