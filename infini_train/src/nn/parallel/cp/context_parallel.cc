@@ -86,13 +86,13 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndKVAllGather(
     const std::shared_ptr<Tensor> &v, const std::shared_ptr<Tensor> &mask) {
   CHECK_EQ(k->Dims()[1], v->Dims()[1]);
   CHECK_EQ(q->Dims()[1] % k->Dims()[1], 0);
-  const int64_t n_rep = q->Dims()[1] / k->Dims()[1];
   // gathered_k: (B, H_kv, T_g, D)
   auto gathered_k = detail::GatherFromCPRegionFunc(k);
   // gathered_v: (B, H_kv, T_g, D)
   auto gathered_v = detail::GatherFromCPRegionFunc(v);
   // k_for_attn: (B, H_q, T_g, D)
-  return ScaledDotProductAttention(q, gathered_k, gathered_v, n_rep, mask);
+  return ScaledDotProductAttention(q, gathered_k, gathered_v, k->Dims()[1],
+                                   mask);
 }
 
 std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
@@ -109,7 +109,7 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
   CHECK_EQ(q_heads % kv_heads, 0);
 
   if (cp_size == 1) {
-    return ScaledDotProductAttention(q, k, v, q_heads / kv_heads, mask);
+    return ScaledDotProductAttention(q, k, v, kv_heads, mask);
   }
 
   const auto *cp_group = detail::GetCPGroup(q);
@@ -123,10 +123,9 @@ std::shared_ptr<Tensor> AttnFuncWithCPAndQKVOA2A(
   // full_mask: (1, 1, T_g, T_g)
   auto full_mask = mask ? detail::GatherFromCPRegionFunc(mask) : nullptr;
 
-  const int64_t n_rep = q_shard->Dims()[1] / k_shard->Dims()[1];
   // output_shard: (B, H_q/CP, T_g, D)
-  auto output_shard =
-      ScaledDotProductAttention(q_shard, k_shard, v_shard, n_rep, full_mask);
+  auto output_shard = ScaledDotProductAttention(q_shard, k_shard, v_shard,
+                                                k_shard->Dims()[1], full_mask);
 
   // output: (B, H_q, T_l, D)
   return detail::AllToAllHeadToSeqCPRegionFunc(output_shard, cp_group);

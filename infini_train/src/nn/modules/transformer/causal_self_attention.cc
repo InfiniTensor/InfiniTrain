@@ -1,5 +1,7 @@
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
 
+#include <cmath>
+#include <limits>
 #include <map>
 #include <memory>
 #include <ostream>
@@ -244,6 +246,12 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   k = k->Transpose(1, 2);
   v = v->Transpose(1, 2);
 
+  if (!use_context_parallel) {
+    // align n_head in GQA
+    k = RepeatKVHeads(k, n_rep_);
+    v = RepeatKVHeads(v, n_rep_);
+  }
+
   // TODO(zbl): support flash attention later
   // if (flash_) { ... }
 
@@ -251,12 +259,20 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   if (use_context_parallel) {
     y = parallel::AttnForwardFuncWithCP(q, k, v, mask);
   } else {
-    if (!mask) {
-      const auto T_kv = T * parallel::global::GetContextParallelSize();
-      mask = buffers_[kParamBiasName]->Slice({0, 0, 0, 0}, {1, 1, T_kv, T_kv},
-                                             {1, 1, 1, 1}) == 0;
+    // Keep the non-CP path equivalent to the original attention
+    // implementation; the shared helper is only for CP backends.
+    auto att = q->Matmul(k->Transpose(-2, -1)) *
+               (1.0f / std::sqrt(static_cast<float>(D)));
+    if (mask) {
+      att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+    } else {
+      auto causal_mask = buffers_[kParamBiasName]->Slice(
+          {0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+      att = att->MaskedFill(causal_mask == 0,
+                            -std::numeric_limits<float>::infinity());
     }
-    y = ScaledDotProductAttention(q, k, v, n_rep_, mask);
+    att = nn::function::Softmax(att, -1);
+    y = att->Matmul(v);
   }
   // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T,
   // C_local)
