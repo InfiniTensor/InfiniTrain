@@ -1,6 +1,8 @@
 #include "infini_train/include/autograd/function.h"
 
+#include <array>
 #include <ostream>
+#include <string_view>
 
 #include "glog/logging.h"
 
@@ -9,6 +11,7 @@
 #include "infini_train/include/autograd/grad_mode.h"
 #include "infini_train/include/common/hook.h"  // IWYU pragma: keep
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/tensor.h"
@@ -216,6 +219,43 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
     // no_grad in autograd.Function.Forward()
     output_tensors = Forward(compute_inputs);
     SetupContext(compute_inputs, output_tensors);
+  }
+
+  // Structural convergence: lower-precision operators (Linear/Matmul today)
+  // return their output as FP32, so reduced precision stays confined to the
+  // GEMM body and consumers such as LayerNorm never receive a bf16 gradient
+  // that violates their same-dtype guard. The gate is exact: autocast enabled,
+  // type_ in kLowerPrecisionOps, a non-null output, and output dtype equal to
+  // the autocast dtype; FP32 runs, other dtypes/policies and disabled autocast
+  // keep the original shared_ptr, so object identity and the existing FP32
+  // numerics are unchanged. The GEMM output is still bf16-rounded, only carried
+  // in an FP32 container; this is not an accuracy improvement. Placement: after
+  // SetupContext and before SaveVariables, so saved variables, post-hooks, the
+  // non-differentiable mark and the grad_fn wiring all bind to the replaced
+  // tensor.
+  if (tls_autocast_context.enabled) {
+    const std::string_view op_name = GetBaseOpName(type_);
+    bool is_lower_precision = false;
+    for (const auto &name : kLowerPrecisionOps) {
+      if (op_name == name) {
+        is_lower_precision = true;
+        break;
+      }
+    }
+    if (is_lower_precision) {
+      for (auto &output : output_tensors) {
+        if (!output || output->Dtype() != tls_autocast_context.autocast_dtype) {
+          continue;
+        }
+        const bool was_non_differentiable = ctx_.IsNonDifferentiable(output);
+        auto converted =
+            std::make_shared<Tensor>(output->To(DataType::kFLOAT32));
+        if (was_non_differentiable) {
+          ctx_.MarkNonDifferentiable({converted});
+        }
+        output = converted;
+      }
+    }
   }
 
   if (record_context) {
