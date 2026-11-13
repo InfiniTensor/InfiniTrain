@@ -67,9 +67,10 @@ Build Options:
 |                           | Distributed Data Parallel (DDP) | Collective-based data parallelism                    | ✔ Supported |
 |                           | Tensor Parallelism (TP)         | Intra-layer tensor sharding                          | ✔ Supported |
 |                           | Sequence Parallelism (SP)       | Sequence dimension sharding                          | ✔ Supported |
+|                           | Context Parallelism (CP)        | Long-sequence sharding with ring/all-to-all attention | ✔ Supported |
 |                           | Pipeline Parallelism (PP)       | GPipe, 1F1B scheduling, Virtual Pipeline (vPP)       | ✔ Supported |
 |                           | Expert Parallelism (EP)         | Expert sharding and AllGather-based token dispatch   | ✔ Supported |
-|                           | Hybrid Parallelism              | Arbitrary combination of DDP + TP + SP + PP          | ✔ Supported |
+|                           | Hybrid Parallelism              | TP + SP + CP + EP + DDP + PP combinations            | ✔ Supported |
 |                           | Multi-process Launch            | `infini_run` and thread-based launch modes           | ✔ Supported |
 | Core Components           | Multi-backend                   | CPU and CUDA execution backends                      | ✔ Supported |
 |                           | Multi-node Distributed Training | Distributed execution across multiple nodes          | ✔ Supported |
@@ -258,6 +259,37 @@ world_size = nnodes × nproc_per_node × nthread_per_process
 
 ### Parallelism Strategies
 
+Parallel ranks use the axis order `TP -> CP -> EP -> DP -> PP`; dense models
+omit `EP`, and `SP` is coupled with `TP`.
+
+#### Tensor Parallelism (TP)
+
+```bash
+--tensor_parallel 4        # 4-way tensor parallelism
+--sequence_parallel        # Enable sequence parallelism (requires TP > 1)
+```
+
+#### Context Parallelism (CP)
+
+GPT-2, LLaMA 3, and Qwen3-8B can shard long sequences across CP ranks:
+
+```bash
+--context_parallel 4  # 4-way context parallelism
+--cp_comm_type p2p    # all_gather, p2p (default), a2a, or a2a+p2p
+--attention_cp_layout zigzag  # contiguous or zigzag (default)
+```
+
+Use `--hierarchical_context_parallel_sizes A,P` with `a2a+p2p`, where
+`A × P` must equal the CP size. See
+[Context Parallel usage guide](docs/context_parallel_usage_guide.md) for
+communication-mode tradeoffs, layout behavior, and divisibility requirements.
+
+#### Expert Parallelism (EP)
+
+MoE training supports Expert Parallelism (EP), allowing experts to be distributed across ranks. The current implementation uses an `AllGather`-based token dispatcher to exchange token data across ranks and route tokens to their corresponding experts.
+
+The distributed TinyMixtral example validates cross-rank token dispatch, local expert computation, and gradient aggregation and synchronization. Dense and MoE communication topology views describe the corresponding process groups for distributed execution.
+
 #### Distributed Data Parallelism (DDP)
 
 For a direct launch with TP and PP disabled, the following starts eight
@@ -268,17 +300,10 @@ data-parallel workers in one process:
 ```
 
 For all launch modes, the data-parallel size is derived from the total world
-size after accounting for tensor and pipeline parallelism:
+size after accounting for tensor, context, and pipeline parallelism:
 
 ```text
-data_parallel_size = world_size / (tensor_parallel × pipeline_parallel)
-```
-
-#### Tensor Parallelism (TP)
-
-```bash
---tensor_parallel 4        # 4-way tensor parallelism
---sequence_parallel        # Enable sequence parallelism (requires TP > 1)
+data_parallel_size = world_size / (tensor_parallel × context_parallel × pipeline_parallel)
 ```
 
 #### Pipeline Parallelism (PP)
@@ -288,17 +313,10 @@ data_parallel_size = world_size / (tensor_parallel × pipeline_parallel)
 --virtual_pipeline_parallel 4  	# Virtual pipeline for better load balancing
 ```
 
-#### Expert Parallelism (EP)
-
-MoE training supports expert sharding across ranks with an
-`AllGather`-based token dispatcher. The distributed TinyMixtral example
-validates cross-rank token dispatch, local expert computation, and gradient
-synchronization. Dense and MoE communication topology views provide the
-corresponding process groups.
-
 #### Combining Parallelism Strategies
 
-Multiple parallelism strategies (DDP, TP, SP, PP) can be freely combined to scale training across devices and nodes.
+Multiple parallelism strategies (TP, SP, CP, EP, DDP, PP) can be freely combined to
+scale training across devices and nodes.
 MoE models additionally support EP; supported combinations depend on the model and configuration.
 
 ## 🗺 Roadmap

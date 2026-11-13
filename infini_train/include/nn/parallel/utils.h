@@ -25,8 +25,17 @@ namespace infini_train::nn::parallel {
 std::string GetDataParallelProcessGroupName(int global_rank);
 std::string GetExpertDataParallelProcessGroupName(int global_rank);
 
+std::string GetDataParallelWithContextProcessGroupName(int global_rank);
+
 std::string GetTensorParallelProcessGroupName(int global_rank);
 std::string GetExpertTensorParallelProcessGroupName(int global_rank);
+
+std::string GetContextParallelProcessGroupName(int global_rank);
+
+// Level 0 exchanges heads/sequences; level 1 circulates KV across sequence
+// blocks.
+std::string GetHierarchicalContextParallelProcessGroupName(int global_rank,
+                                                           int level);
 
 std::string GetPipelineParallelProcessGroupName(int global_rank);
 std::string GetExpertParallelProcessGroupName(int global_rank);
@@ -35,8 +44,15 @@ std::string GetExpertTensorAndExpertParallelProcessGroupName(int global_rank);
 std::vector<int> GetDataParallelGroupRanks(int global_rank);
 std::vector<int> GetExpertDataParallelGroupRanks(int global_rank);
 
+std::vector<int> GetDataParallelWithContextGroupRanks(int global_rank);
+
 std::vector<int> GetTensorParallelGroupRanks(int global_rank);
 std::vector<int> GetExpertTensorParallelGroupRanks(int global_rank);
+
+std::vector<int> GetContextParallelGroupRanks(int global_rank);
+
+std::vector<int> GetHierarchicalContextParallelGroupRanks(int global_rank,
+                                                          int level);
 
 std::vector<int> GetPipelineParallelGroupRanks(int global_rank);
 std::vector<int> GetExpertParallelGroupRanks(int global_rank);
