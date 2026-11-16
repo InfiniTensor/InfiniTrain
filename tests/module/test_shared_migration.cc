@@ -1,12 +1,23 @@
+#include <stdint.h>
+
 #include <chrono>
+#include <cstdlib>
 #include <filesystem>
+#include <memory>
+#include <string>
+#include <unordered_map>
+#include <utility>
+#include <vector>
 
 #include "gtest/gtest.h"
 
 #include "infini_train/include/checkpoint/checkpoint.h"
 #include "infini_train/include/core/runtime/device_guard.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
 
