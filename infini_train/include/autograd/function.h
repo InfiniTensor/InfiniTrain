@@ -11,10 +11,12 @@
 #include <vector>
 
 #include "infini_train/include/autocast.h"
-#include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 
 namespace infini_train {
+
+enum class DataType : int8_t;
+
 class Tensor;
 class HookHandle;
 template <typename HookType>
@@ -143,9 +145,11 @@ class Function : public std::enable_shared_from_this<Function> {
   };
 
   std::vector<std::pair<std::shared_ptr<Function>, int>> next_functions_;
+
   size_t num_outputs_ = 1;
 
   std::vector<std::optional<OutputMetadata>> output_metadata_;
+
   const std::string type_ = kUndefinedType;
   std::vector<FunctionPreHook> forward_pre_hooks_;
   std::vector<FunctionPostHook> forward_post_hooks_;
