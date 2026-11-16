@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -12,6 +13,7 @@
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"

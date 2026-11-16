@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include <initializer_list>
 #include <ostream>
 #include <string>
 #include <unordered_map>
