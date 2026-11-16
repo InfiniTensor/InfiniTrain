@@ -49,4 +49,47 @@ TEST_P(TensorOpTest, Detach) {
   EXPECT_EQ(data->output_idx(), 0);
 }
 
+TEST_P(TensorOpTest, ScalarLeafBackwardAccumulatesImplicitGradient) {
+  auto input = std::make_shared<Tensor>(std::vector<int64_t>{},
+                                        DataType::kFLOAT32, GetDevice(), true);
+  input->Fill(2.0f);
+  input->Backward();
+  test::ExpectTensorFloatEqual(input->grad(), 1.0f);
+  input->Backward();
+  test::ExpectTensorFloatEqual(input->grad(), 2.0f);
+}
+
+TEST_P(TensorOpTest, LeafBackwardAccumulatesExplicitGradient) {
+  auto input = std::make_shared<Tensor>(std::vector<int64_t>{2},
+                                        DataType::kFLOAT32, GetDevice(), true);
+  const float data[] = {3.0f, 4.0f};
+  auto gradient = std::make_shared<Tensor>(data, input->Dims(),
+                                           DataType::kFLOAT32, GetDevice());
+  input->Backward(gradient);
+  test::ExpectTensorFloatEqual(input->grad(), {3.0f, 4.0f});
+  input->Backward(gradient);
+  test::ExpectTensorFloatEqual(input->grad(), {6.0f, 8.0f});
+}
+
+TEST_P(TensorOpTest, LeafBackwardDoesNotWaitForForwardConsumers) {
+  auto input = std::make_shared<Tensor>(std::vector<int64_t>{},
+                                        DataType::kFLOAT32, GetDevice(), true);
+  input->Fill(2.0f);
+  auto output = input->Mul(3.0f);
+  input->Backward();
+  test::ExpectTensorFloatEqual(input->grad(), 1.0f);
+  output->Backward();
+  test::ExpectTensorFloatEqual(input->grad(), 4.0f);
+}
+
+TEST_P(TensorOpTest, LeafBackwardValidatesGradientShape) {
+  ONLY_CPU();
+  auto input = std::make_shared<Tensor>(std::vector<int64_t>{2},
+                                        DataType::kFLOAT32, GetDevice(), true);
+  auto gradient = std::make_shared<Tensor>(std::vector<int64_t>{3},
+                                           DataType::kFLOAT32, GetDevice());
+  EXPECT_DEATH(input->Backward(gradient), "Check failed");
+  EXPECT_DEATH(input->Backward(), "Check failed");
+}
+
 INFINI_TRAIN_REGISTER_TEST(TensorOpTest);

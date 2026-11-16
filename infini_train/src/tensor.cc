@@ -663,7 +663,13 @@ bool Tensor::ConsumeGradOverwriteFlag() {
 void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph,
                       bool create_graph) const {
   CHECK(!retain_graph && !create_graph) << "Not implemented yet!";
-  if (grad_fn_) {
+  auto backward_fn = grad_fn_;
+  if (!backward_fn && requires_grad_) {
+    // A leaf backward is independent of any forward consumers of the leaf.
+    backward_fn = std::make_shared<autograd::AccumulateGrad>(
+        std::const_pointer_cast<Tensor>(shared_from_this()));
+  }
+  if (backward_fn) {
     if (!gradient) {
       CHECK_EQ(dims_.size(), 0);
       gradient =
@@ -678,7 +684,7 @@ void Tensor::Backward(std::shared_ptr<Tensor> gradient, bool retain_graph,
         CHECK_EQ(dims_[idx], gradient->Dims()[idx]);
       }
     }
-    grad_fn_->BackwardPartial(gradient, output_idx_);
+    backward_fn->BackwardPartial(gradient, grad_fn_ ? output_idx_ : 0);
   }
 }
 
