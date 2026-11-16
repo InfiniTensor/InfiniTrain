@@ -5,6 +5,8 @@
 #include <vector>
 
 #include "infini_train/include/autograd/activations.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/tensor.h"

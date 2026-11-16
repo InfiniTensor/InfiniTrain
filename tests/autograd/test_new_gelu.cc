@@ -1,10 +1,15 @@
+#include <stddef.h>
+
 #include <cmath>
 #include <cstdint>
+#include <initializer_list>
 #include <memory>
 #include <vector>
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
 #include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/nn/modules/activations.h"
