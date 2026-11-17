@@ -212,7 +212,8 @@
                         "batch_size": 10,
                         "total_batch_size": 5120,
                         "context_parallel": 2,
-                        "cp_comm_type": "p2p"
+                        "cp_comm_type": "p2p",
+                        "attention_cp_layout": "zigzag"
                     }
                 },
                 {
@@ -224,7 +225,8 @@
                         "batch_size": 10,
                         "total_batch_size": 5120,
                         "context_parallel": 2,
-                        "cp_comm_type": "p2p"
+                        "cp_comm_type": "p2p",
+                        "attention_cp_layout": "zigzag"
                     }
                 },
                 {
@@ -240,7 +242,8 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "context_parallel": 2,
-                        "cp_comm_type": "p2p"
+                        "cp_comm_type": "p2p",
+                        "attention_cp_layout": "zigzag"
                     }
                 },
                 {
@@ -256,7 +259,48 @@
                         "pipeline_parallel": 2,
                         "virtual_pipeline_parallel": 2,
                         "context_parallel": 2,
-                        "cp_comm_type": "p2p"
+                        "cp_comm_type": "p2p",
+                        "attention_cp_layout": "zigzag"
+                    }
+                },
+                {
+                    "id": "11_cp2_all_gather_contiguous",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "all_gather",
+                        "attention_cp_layout": "contiguous"
+                    }
+                },
+                {
+                    "id": "12_cp2_a2a_contiguous_bfloat16",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "a2a",
+                        "attention_cp_layout": "contiguous"
+                    }
+                },
+                {
+                    "id": "13_cp2_a2a_p2p_2x1_zigzag",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 10,
+                        "total_batch_size": 5120,
+                        "context_parallel": 2,
+                        "cp_comm_type": "a2a+p2p",
+                        "attention_cp_layout": "zigzag",
+                        "hierarchical_context_parallel_sizes": "2,1"
                     }
                 }
             ]
@@ -409,6 +453,36 @@
                     }
                 },
                 {
+                    "id": "8_distopt",
+                    "args": {
+                        "dtype": "float32",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "zero_stage": 1
+                    }
+                },
+                {
+                    "id": "8_bfloat16_distopt",
+                    "args": {
+                        "dtype": "bfloat16",
+                        "nthread_per_process": 8,
+                        "num_iteration": 10,
+                        "batch_size": 40,
+                        "total_batch_size": 5120,
+                        "tensor_parallel": 2,
+                        "sequence_parallel": true,
+                        "pipeline_parallel": 2,
+                        "virtual_pipeline_parallel": 2,
+                        "zero_stage": 1
+                    }
+                },
+                {
                     "id": "9_distopt",
                     "args": {
                         "dtype": "float32",
@@ -458,36 +532,6 @@
                         "context_parallel": 2,
                         "cp_comm_type": "p2p",
                         "zero_stage": 2
-                    }
-                },
-                {
-                    "id": "8_distopt",
-                    "args": {
-                        "dtype": "float32",
-                        "nthread_per_process": 8,
-                        "num_iteration": 10,
-                        "batch_size": 40,
-                        "total_batch_size": 5120,
-                        "tensor_parallel": 2,
-                        "sequence_parallel": true,
-                        "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2,
-                        "zero_stage": 1
-                    }
-                },
-                {
-                    "id": "8_bfloat16_distopt",
-                    "args": {
-                        "dtype": "bfloat16",
-                        "nthread_per_process": 8,
-                        "num_iteration": 10,
-                        "batch_size": 40,
-                        "total_batch_size": 5120,
-                        "tensor_parallel": 2,
-                        "sequence_parallel": true,
-                        "pipeline_parallel": 2,
-                        "virtual_pipeline_parallel": 2,
-                        "zero_stage": 1
                     }
                 }
             ]

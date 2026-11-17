@@ -514,6 +514,11 @@ class AttnWithCPAndKVP2P : public autograd::Function {
       const bool chunk_fully_masked = !zigzag && owner > rank;
       const int64_t query_start = zigzag && owner > rank ? local_t / 2 : 0;
       const int64_t kv_length = zigzag && owner < rank ? local_t / 2 : local_t;
+      // FIXME(cx): Stack and online-softmax merging should promote mixed dtypes
+      // generically. For now, keep masked statistics in the FP32 dtype used by
+      // active BF16 chunks to avoid reinterpreting a BF16 buffer as FP32.
+      const auto stats_dtype =
+          q->Dtype() == DataType::kBFLOAT16 ? DataType::kFLOAT32 : q->Dtype();
 
       std::shared_ptr<Tensor> chunk_max;
       std::shared_ptr<Tensor> chunk_sum;
@@ -524,11 +529,11 @@ class AttnWithCPAndKVP2P : public autograd::Function {
         stats_shape.back() = 1;
         // chunk_max: (B, H_q, T_l, 1)
         chunk_max =
-            std::make_shared<Tensor>(stats_shape, q->Dtype(), q->GetDevice());
+            std::make_shared<Tensor>(stats_shape, stats_dtype, q->GetDevice());
         chunk_max->Fill(std::numeric_limits<float>::lowest());
         // chunk_sum: (B, H_q, T_l, 1)
         chunk_sum =
-            std::make_shared<Tensor>(stats_shape, q->Dtype(), q->GetDevice());
+            std::make_shared<Tensor>(stats_shape, stats_dtype, q->GetDevice());
         chunk_sum->Fill(0.0f);
         // chunk_out: (B, H_q, T_l, D)
         chunk_out = NewZeroTensorLike(q);
