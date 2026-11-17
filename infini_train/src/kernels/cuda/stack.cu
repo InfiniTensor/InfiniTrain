@@ -46,6 +46,8 @@ std::shared_ptr<Tensor> StackForward(
   CHECK_LE(dim, base_dims.size());
   for (const auto &input : inputs) {
     CHECK(input->Dims() == base_dims);
+    CHECK(input->Dtype() == dtype)
+        << "StackForward inputs must have the same dtype";
   }
 
   std::vector<int64_t> out_dims = base_dims;
