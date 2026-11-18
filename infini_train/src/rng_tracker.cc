@@ -46,35 +46,6 @@ Device CanonicalDevice(const Device &device) {
 
 } // namespace
 
-class RngAccessor {
-public:
-    static RngTracker *CurrentTracker() { return current_scope ? current_scope->tracker_ : nullptr; }
-
-    static const Generator *GetScopedGenerator(const Device &requested_device) {
-        if (!current_scope) {
-            return nullptr;
-        }
-        auto &scope = *current_scope;
-        auto &stream = scope.tracker_->streams_.at(scope.name_);
-        const Device device = CanonicalDevice(requested_device);
-        const RngTracker::DeviceKey key{device.type(), device.index()};
-        auto found = stream.generators.find(key);
-        if (found == stream.generators.end()) {
-            found = stream.generators.emplace(key, CreateGenerator(device, stream.seed)).first;
-        }
-        return &found->second;
-    }
-
-    static bool ManualSeedCurrentStream(uint64_t seed) {
-        if (!current_scope) {
-            return false;
-        }
-        auto &scope = *current_scope;
-        scope.tracker_->ManualSeed(scope.name_, seed);
-        return true;
-    }
-};
-
 RngTracker::RngTracker(uint64_t seed) { streams_.emplace(kDefaultStream, RngStream{seed, {}}); }
 
 RngTracker::~RngTracker() = default;
@@ -272,11 +243,31 @@ RngScope::~RngScope() {
 
 namespace detail {
 
-const Generator *TryGetScopedGenerator(const Device &device) { return RngAccessor::GetScopedGenerator(device); }
+const Generator *TryGetScopedGenerator(const Device &requested_device) {
+    if (!current_scope) {
+        return nullptr;
+    }
+    auto &scope = *current_scope;
+    auto &stream = scope.tracker_->streams_.at(scope.name_);
+    const Device device = CanonicalDevice(requested_device);
+    const RngTracker::DeviceKey key{device.type(), device.index()};
+    auto found = stream.generators.find(key);
+    if (found == stream.generators.end()) {
+        found = stream.generators.emplace(key, CreateGenerator(device, stream.seed)).first;
+    }
+    return &found->second;
+}
 
-bool TryManualSeedScopedRng(uint64_t seed) { return RngAccessor::ManualSeedCurrentStream(seed); }
+bool TryManualSeedScopedRng(uint64_t seed) {
+    if (!current_scope) {
+        return false;
+    }
+    auto &scope = *current_scope;
+    scope.tracker_->ManualSeed(scope.name_, seed);
+    return true;
+}
 
-RngTracker *GetCurrentRngTracker() { return RngAccessor::CurrentTracker(); }
+RngTracker *GetCurrentRngTracker() { return current_scope ? current_scope->tracker_ : nullptr; }
 
 } // namespace detail
 } // namespace infini_train

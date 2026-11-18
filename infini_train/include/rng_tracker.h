@@ -14,6 +14,13 @@
 namespace infini_train {
 
 class Tensor;
+class RngTracker;
+
+namespace detail {
+const Generator *TryGetScopedGenerator(const Device &device);
+bool TryManualSeedScopedRng(uint64_t seed);
+RngTracker *GetCurrentRngTracker();
+} // namespace detail
 
 // Owns independent, named RNG streams for each device. Child threads do not inherit scopes.
 class RngTracker {
@@ -38,8 +45,8 @@ public:
     void SetState(const Tensor &state);
 
 private:
-    friend class RngAccessor;
     friend class RngScope;
+    friend const Generator *detail::TryGetScopedGenerator(const Device &device);
 
     using DeviceKey = std::pair<Device::DeviceType, int8_t>;
 
@@ -71,8 +78,10 @@ public:
     RngScope &operator=(RngScope &&) = delete;
 
 private:
-    friend class RngAccessor;
     friend class RngTracker;
+    friend const Generator *detail::TryGetScopedGenerator(const Device &device);
+    friend bool detail::TryManualSeedScopedRng(uint64_t seed);
+    friend RngTracker *detail::GetCurrentRngTracker();
 
     std::unique_ptr<RngTracker> owned_tracker_;
     RngTracker *tracker_;
