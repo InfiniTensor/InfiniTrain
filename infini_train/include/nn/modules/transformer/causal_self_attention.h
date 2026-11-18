@@ -45,9 +45,5 @@ class CausalSelfAttention
 
   // Setup method for different attention modes
   void SetupAttention(const TransformerConfig &config);
-
-  // GQA helper method
-  std::shared_ptr<infini_train::Tensor> RepeatKV(
-      const std::shared_ptr<infini_train::Tensor> &x, int64_t n_rep);
 };
 }  // namespace infini_train::nn

@@ -18,6 +18,7 @@
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/nn/parallel/context_parallel.h"
 #include "infini_train/include/nn/parallel/global.h"
 #include "infini_train/include/nn/parallel/model_parallel_config.h"
 #include "infini_train/include/nn/parallel/tensor_parallel.h"
@@ -109,6 +110,28 @@ void CausalSelfAttention::SetupAttention(const TransformerConfig &config) {
     n_kv_head_ = n_head_;
     n_rep_ = 1;
   }
+
+  // Validate CP attn heads requirements
+  const int cp_size = parallel::global::GetContextParallelSize();
+  const int64_t local_kv_heads = n_kv_head_ / tp_world_size;
+  CHECK_EQ(local_n_head_ % local_kv_heads, 0)
+      << "Local query heads must be divisible by local KV heads";
+  int64_t head_shards = 0;
+  const auto comm_type = parallel::global::GetContextParallelCommType();
+  if (comm_type == parallel::ContextParallelCommType::kA2A) {
+    head_shards = cp_size;
+  } else if (comm_type == parallel::ContextParallelCommType::kA2AP2P) {
+    const auto &hierarchy =
+        parallel::global::GetHierarchicalContextParallelSizes();
+    CHECK_EQ(hierarchy.size(), 2);
+    head_shards = hierarchy[0];
+  }
+  if (head_shards > 1) {
+    CHECK_EQ(local_n_head_ % head_shards, 0)
+        << "A2A CP requires local query heads divisible by its subgroup size";
+    CHECK_EQ(local_kv_heads % head_shards, 0)
+        << "A2A CP requires local KV heads divisible by its subgroup size";
+  }
 }
 
 ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
@@ -155,21 +178,6 @@ ShardedStateDict CausalSelfAttention::BuildShardedStateDict(
   return state;
 }
 
-std::shared_ptr<infini_train::Tensor> CausalSelfAttention::RepeatKV(
-    const std::shared_ptr<infini_train::Tensor> &x, int64_t n_rep) {
-  const auto &shape = x->Dims();
-  const int64_t B = shape[0], T = shape[1], H = shape[2], D = shape[3];
-
-  if (n_rep == 1) {
-    return x;
-  }
-
-  return x->View({B, T, H, 1, D})
-      ->RepeatInterleave(n_rep, 3)
-      ->Contiguous()
-      ->View({B, T, H * n_rep, D});
-}
-
 std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
     const std::vector<std::shared_ptr<infini_train::Tensor>> &x) {
   const auto B = x[0]->Dims()[0];  // bs
@@ -184,7 +192,7 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
 
   const auto freqs_cis = x.size() > 1 ? x[1] : nullptr;
   const auto start_pos = x.size() > 2 ? x[2] : nullptr;
-  const auto mask = x.size() > 3 ? x[3] : nullptr;
+  auto mask = x.size() > 3 ? x[3] : nullptr;
   if (config_.position_embedding_type == PositionEmbeddingType::kRoPE) {
     CHECK(freqs_cis != nullptr) << "freqs_cis is null.";
   }
@@ -194,6 +202,11 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   // NOTE(zbl): Acquire full T after AllGather is performed in
   // ColumnParallelLinear
   const auto T = qkv->Dims()[1];
+  const bool use_context_parallel =
+      parallel::global::GetContextParallelSize() > 1;
+  if (use_context_parallel && !mask) {
+    mask = parallel::MakeCausalMaskAlongCPRegionFunc(T, x[0]->GetDevice());
+  }
   // NOTE(zbl): torch script uses torch.split({...}, dim) to split tensors into
   // sub-tensors in different sizes
   //            use Slice() to work around here
@@ -228,41 +241,39 @@ std::vector<std::shared_ptr<infini_train::Tensor>> CausalSelfAttention::Forward(
   // TODO(zbl): use kv cache during inference
   // if (use_kv_) { ... }
 
-  // align n_head in GQA
-  // (B, T, KV_local, D) -> (B, T, H_local, D) via RepeatKV
-  k = RepeatKV(k, n_rep_);
-  v = RepeatKV(v, n_rep_);
-
   // (B, T, H_local, D) -> (B, H_local, T, D)
   q = q->Transpose(1, 2);
   k = k->Transpose(1, 2);
   v = v->Transpose(1, 2);
 
+  if (!use_context_parallel) {
+    // align n_head in GQA
+    k = RepeatKVHeads(k, n_rep_);
+    v = RepeatKVHeads(v, n_rep_);
+  }
+
   // TODO(zbl): support flash attention later
   // if (flash_) { ... }
 
-  // manual implementation of attention
-  // this materializes the large (T,T) matrix for all the queries and keys
-
-  // q: (B, H_local, T, D)
-  // k: (B, H_local, T, D) -> (B, H_local, D, T)
-  // q @ k.T: (B, H_local, T, T) -> mul 1.0 / sqrt(D) -> (B, H_local, T, T)
-  auto att = q->Matmul(k->Transpose(-2, -1)) *
-             (1.0 / std::sqrt(static_cast<float>(D)));
-  if (mask) {
-    // mask: (1, 1, T, T)
-    att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+  std::shared_ptr<Tensor> y;
+  if (use_context_parallel) {
+    y = parallel::AttnForwardFuncWithCP(q, k, v, mask);
   } else {
-    // fallback causal mask: (1, 1, T, T)
-    auto causal_mask = buffers_[kParamBiasName]->Slice(
-        {0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
-    att = att->MaskedFill(causal_mask == 0,
-                          -std::numeric_limits<float>::infinity());
+    // Keep the non-CP path equivalent to the original attention
+    // implementation; the shared helper is only for CP backends.
+    auto att = q->Matmul(k->Transpose(-2, -1)) *
+               (1.0f / std::sqrt(static_cast<float>(D)));
+    if (mask) {
+      att = att->MaskedFill(mask, std::numeric_limits<float>::lowest());
+    } else {
+      auto causal_mask = buffers_[kParamBiasName]->Slice(
+          {0, 0, 0, 0}, {1, 1, T, T}, {1, 1, 1, 1});
+      att = att->MaskedFill(causal_mask == 0,
+                            -std::numeric_limits<float>::infinity());
+    }
+    att = nn::function::Softmax(att, -1);
+    y = att->Matmul(v);
   }
-  // (B, H_local, T, T)
-  att = nn::function::Softmax(att, -1);
-  // att: (B, H_local, T, T) @ v: (B, H_local, T, D) -> y: (B, H_local, T, D)
-  auto y = att->Matmul(v);
   // (B, H_local, T, D) -> Transpose(1, 2) -> (B, T, H_local, D) -> (B, T,
   // C_local)
   y = y->Transpose(1, 2)->Contiguous()->View({B, T, C_local});

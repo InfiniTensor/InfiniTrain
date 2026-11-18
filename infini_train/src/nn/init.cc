@@ -7,7 +7,6 @@
 #include <numeric>
 #include <optional>
 #include <ostream>
-#include <random>
 #include <string>
 #include <unordered_map>
 #include <unordered_set>
@@ -35,13 +34,13 @@ struct DistributionBounds {
 DistributionBounds GetDistributionBounds(DataType dtype) {
   switch (dtype) {
     case DataType::kFLOAT16: {
-      const double max =
-          static_cast<float>(FP16(static_cast<uint16_t>(0x7bff), FP16::from_bits()));
+      const double max = static_cast<float>(
+          FP16(static_cast<uint16_t>(0x7bff), FP16::from_bits()));
       return {-max, max};
     }
     case DataType::kBFLOAT16: {
-      const double max =
-          static_cast<float>(BF16(static_cast<uint16_t>(0x7f7f), BF16::from_bits()));
+      const double max = static_cast<float>(
+          BF16(static_cast<uint16_t>(0x7f7f), BF16::from_bits()));
       return {-max, max};
     }
     case DataType::kFLOAT32:
@@ -59,24 +58,26 @@ DistributionBounds GetDistributionBounds(DataType dtype) {
 
 void CheckDistributionTensor(const Tensor &tensor) {
   CHECK(IsFloatingPointDType(tensor.Dtype()))
-      << "Uniform and Normal initialization support floating-point tensors only";
+      << "Uniform and Normal initialization support floating-point tensors "
+         "only";
 }
 
 void CheckUniformParameters(const Tensor &tensor, double from, double to) {
   const auto bounds = GetDistributionBounds(tensor.Dtype());
-  CHECK_GE(from, bounds.lowest) << "uniform expects from to be within the range of "
-                                << kDataTypeToDesc.at(tensor.Dtype());
-  CHECK_LE(from, bounds.max) << "uniform expects from to be within the range of "
-                             << kDataTypeToDesc.at(tensor.Dtype());
+  CHECK_GE(from, bounds.lowest)
+      << "uniform expects from to be within the range of "
+      << kDataTypeToDesc.at(tensor.Dtype());
+  CHECK_LE(from, bounds.max)
+      << "uniform expects from to be within the range of "
+      << kDataTypeToDesc.at(tensor.Dtype());
   CHECK_GE(to, bounds.lowest) << "uniform expects to to be within the range of "
                               << kDataTypeToDesc.at(tensor.Dtype());
   CHECK_LE(to, bounds.max) << "uniform expects to to be within the range of "
                            << kDataTypeToDesc.at(tensor.Dtype());
   CHECK_LE(from, to) << "uniform expects a [from, to) range, but found from="
                      << from << " > to=" << to;
-  CHECK_LE(to - from, bounds.max)
-      << "uniform expects to - from to fit in "
-      << kDataTypeToDesc.at(tensor.Dtype());
+  CHECK_LE(to - from, bounds.max) << "uniform expects to - from to fit in "
+                                  << kDataTypeToDesc.at(tensor.Dtype());
 }
 
 void CheckNormalParameters(double std) {
@@ -173,8 +174,7 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor,
 }
 
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a,
-                                float b,
-                                std::optional<Generator> generator) {
+                                float b, std::optional<Generator> generator) {
   CheckDistributionTensor(*tensor);
   CheckUniformParameters(*tensor, a, b);
   auto device = tensor->GetDevice();

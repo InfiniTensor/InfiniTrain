@@ -9,28 +9,30 @@
 namespace infini_train::core::cuda {
 
 class CudaGeneratorImpl final : public GeneratorImpl {
-public:
-    explicit CudaGeneratorImpl(int8_t device_index, uint64_t seed = Generator::kDefaultSeed);
-    ~CudaGeneratorImpl() override = default;
+ public:
+  explicit CudaGeneratorImpl(int8_t device_index,
+                             uint64_t seed = Generator::kDefaultSeed);
+  ~CudaGeneratorImpl() override = default;
 
-    void set_current_seed(uint64_t seed) override;
-    uint64_t current_seed() const override;
-    uint64_t Seed() override;
-    void set_state(const Tensor &state) override;
-    std::shared_ptr<Tensor> get_state() const override;
+  void set_current_seed(uint64_t seed) override;
+  uint64_t current_seed() const override;
+  uint64_t Seed() override;
+  void set_state(const Tensor &state) override;
+  std::shared_ptr<Tensor> get_state() const override;
 
-    // The caller must hold mutex_ while reserving Philox subsequences.
-    uint64_t ReservePhiloxSubsequence(uint64_t increment);
+  // The caller must hold mutex_ while reserving Philox subsequences.
+  uint64_t ReservePhiloxSubsequence(uint64_t increment);
 
-private:
-    CudaGeneratorImpl *CloneImpl() const override;
+ private:
+  CudaGeneratorImpl *CloneImpl() const override;
 
-    uint64_t seed_ = Generator::kDefaultSeed;
-    uint64_t next_philox_subsequence_ = 0;
+  uint64_t seed_ = Generator::kDefaultSeed;
+  uint64_t next_philox_subsequence_ = 0;
 };
 
 const Generator &GetDefaultCudaGenerator(int8_t device_index = -1);
-Generator CreateCudaGenerator(int8_t device_index, uint64_t seed = Generator::kDefaultSeed);
+Generator CreateCudaGenerator(int8_t device_index,
+                              uint64_t seed = Generator::kDefaultSeed);
 void ManualSeedAll(uint64_t seed);
 
-} // namespace infini_train::core::cuda
+}  // namespace infini_train::core::cuda

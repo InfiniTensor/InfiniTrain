@@ -79,7 +79,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
   void *DataPtr();
   const void *DataPtr() const;
 
-  bool defined() const { return buffer_ != nullptr; }
+  bool defined() const;
 
   size_t SizeInBytes() const;
 

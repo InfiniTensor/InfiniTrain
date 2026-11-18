@@ -53,9 +53,9 @@ std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &input, double p,
                                 std::optional<Generator> generator) {
   CHECK(input != nullptr);
   CHECK_GE(p, 0.0) << "dropout probability has to be between 0 and 1, but got "
-                    << p;
+                   << p;
   CHECK_LE(p, 1.0) << "dropout probability has to be between 0 and 1, but got "
-                    << p;
+                   << p;
   if (!training || p == 0.0 || input->NumElements() == 0) {
     return input;
   }

@@ -57,17 +57,23 @@ std::shared_ptr<Tensor> Triu(const std::shared_ptr<Tensor> &input,
 std::shared_ptr<Tensor> Ones(const std::vector<int64_t> size);
 
 // Returns a tensor with uniformly distributed random values in [0, 1).
-std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size, DataType dtype = DataType::kFLOAT32,
-                             Device device = Device(), std::optional<Generator> generator = std::nullopt,
+std::shared_ptr<Tensor> Rand(const std::vector<int64_t> &size,
+                             DataType dtype = DataType::kFLOAT32,
+                             Device device = Device(),
+                             std::optional<Generator> generator = std::nullopt,
                              bool requires_grad = false);
 
-// Returns a tensor with normally distributed random values with mean 0 and standard deviation 1.
-std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size, DataType dtype = DataType::kFLOAT32,
-                              Device device = Device(), std::optional<Generator> generator = std::nullopt,
+// Returns a tensor with normally distributed random values with mean 0 and
+// standard deviation 1.
+std::shared_ptr<Tensor> Randn(const std::vector<int64_t> &size,
+                              DataType dtype = DataType::kFLOAT32,
+                              Device device = Device(),
+                              std::optional<Generator> generator = std::nullopt,
                               bool requires_grad = false);
 
-std::shared_ptr<Tensor> Dropout(const std::shared_ptr<Tensor> &input, double p = 0.5, bool training = true,
-                                std::optional<Generator> generator = std::nullopt);
+std::shared_ptr<Tensor> Dropout(
+    const std::shared_ptr<Tensor> &input, double p = 0.5, bool training = true,
+    std::optional<Generator> generator = std::nullopt);
 
 // Returns a new tensor with the reciprocal of the elements of input.
 //

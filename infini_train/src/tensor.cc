@@ -129,6 +129,8 @@ const void *Tensor::DataPtr() const {
   return reinterpret_cast<const uint8_t *>(buffer_->DataPtr()) + offset_;
 }
 
+bool Tensor::defined() const { return buffer_ != nullptr; }
+
 size_t Tensor::SizeInBytes() const {
   return kDataTypeToSize.at(dtype_) * num_elements_;
 }

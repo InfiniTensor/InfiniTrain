@@ -2,7 +2,6 @@
 
 #include <memory>
 #include <optional>
-#include <string>
 #include <utility>
 #include <vector>
 
@@ -16,19 +15,23 @@ class Tensor;
 namespace infini_train::autograd {
 
 class Dropout final : public Function {
-public:
-    static constexpr char kType[] = "DropoutFunction";
+ public:
+  static constexpr char kType[] = "DropoutFunction";
 
-    Dropout(double p, std::optional<Generator> generator) : Function(kType), p_(p), generator_(std::move(generator)) {}
+  Dropout(double p, std::optional<Generator> generator)
+      : Function(kType), p_(p), generator_(std::move(generator)) {}
 
-    std::vector<std::shared_ptr<Tensor>> Forward(const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
-    void SetupContext(const std::vector<std::shared_ptr<Tensor>> &input_tensors,
-                      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
-    std::vector<std::shared_ptr<Tensor>> Backward(const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+  void SetupContext(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors,
+      const std::vector<std::shared_ptr<Tensor>> &output_tensors) override;
+  std::vector<std::shared_ptr<Tensor>> Backward(
+      const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 
-private:
-    double p_ = 0.0;
-    std::optional<Generator> generator_;
+ private:
+  double p_ = 0.0;
+  std::optional<Generator> generator_;
 };
 
-} // namespace infini_train::autograd
+}  // namespace infini_train::autograd
