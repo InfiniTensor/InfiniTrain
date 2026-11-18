@@ -1,6 +1,8 @@
 #include "infini_train/include/autograd/function.h"
 
+#include <algorithm>
 #include <ostream>
+#include <unordered_map>
 
 #include "glog/logging.h"
 
@@ -249,13 +251,19 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
     has_differentiable_output |= differentiable_outputs[output_idx];
   }
 
-  // Metadata-only recomputation must not change graph dependency counters.
+  // Metadata-only recomputation must not change the recorded graph.
   if (grad_enabled) {
-    grad_outputs_reached_ = 0;
-    grad_outputs_.resize(output_tensors.size(), nullptr);
-    for (bool differentiable : differentiable_outputs) {
-      if (!differentiable) {
-        ++grad_outputs_reached_;
+    num_outputs_ = output_tensors.size();
+    output_metadata_.clear();
+    if (output_tensors.size() > 1) {
+      for (size_t idx = 0; idx < output_tensors.size(); ++idx) {
+        if (differentiable_outputs[idx]) {
+          const auto &output = output_tensors[idx];
+          output_metadata_.push_back(OutputMetadata{
+              output->Dims(), output->Dtype(), output->GetDevice()});
+        } else {
+          output_metadata_.push_back(std::nullopt);
+        }
       }
     }
 
@@ -271,13 +279,9 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
         if (input_tensor->requires_grad() && input_tensor->is_leaf()) {
           next_functions_.emplace_back(input_tensor->grad_accumulator(),
                                        input_tensor->output_idx());
-          input_tensor->grad_accumulator()->IncreaseDependenciesNumber();
         } else {
           next_functions_.emplace_back(input_tensor->grad_fn(),
                                        input_tensor->output_idx());
-          if (input_tensor->grad_fn()) {
-            input_tensor->grad_fn()->IncreaseDependenciesNumber();
-          }
         }
       }
     }
@@ -302,60 +306,103 @@ std::vector<std::shared_ptr<Tensor>> Function::Apply(
   return output_tensors;
 }
 
+struct Function::BackwardContext {
+  struct State {
+    int dependencies = 0;
+
+    int reached = 0;
+
+    std::vector<std::shared_ptr<Tensor>> grad_outputs;
+  };
+
+  std::unordered_map<Function *, State> states;
+};
+
 void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output,
                                int grad_output_idx) {
-  auto device = grad_output->GetDevice();
-  core::DeviceGuard guard(device);
-
-  // NOTE(dcj): The accumulate autograd function has no grad_outputs.
-  // Temporarily resize the vector to hold one nullptr as a buffer.
-  if (grad_outputs_.empty()) {
-    grad_outputs_.resize(1, nullptr);
-  }
-  if (!grad_outputs_.at(grad_output_idx)) {
-    grad_outputs_[grad_output_idx] = std::move(grad_output);
-    ++grad_outputs_reached_;
-  } else {
-    auto kernel =
-        Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
-    kernel.Call<void>(grad_output, 1.0f, grad_outputs_.at(grad_output_idx));
-  }
-  ++dependencies_reached_;
-  if (grad_outputs_reached_ == grad_outputs_.size() &&
-      (dependencies_reached_ == dependencies_number_ ||
-       dependencies_number_ == 0)) {
-    // Call backward pre-hooks
-    for (const auto &hook : backward_pre_hooks_) {
-      if (hook) {
-        hook(this, grad_outputs_);
+  // Each backward call owns its state, including checkpoint recomputation.
+  BackwardContext context;
+  context.states[this].grad_outputs.resize(num_outputs_);
+  std::vector<Function *> functions{this};
+  for (size_t idx = 0; idx < functions.size(); ++idx) {
+    for (const auto &[next, output_idx] : functions[idx]->next_functions_) {
+      if (!next) {
+        continue;
+      }
+      auto [entry, inserted] = context.states.try_emplace(next.get());
+      ++entry->second.dependencies;
+      if (inserted) {
+        entry->second.grad_outputs.resize(next->num_outputs_);
+        functions.push_back(next.get());
       }
     }
+  }
+  BackwardPartial(std::move(grad_output), grad_output_idx, context);
+}
 
-    std::vector<std::shared_ptr<Tensor>> grad_inputs;
-    {
-      autograd::NoGradGuard no_grad;
-      // no_grad in autograd.Function.Backward()
-      grad_inputs = Backward(grad_outputs_);
+void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output,
+                               int grad_output_idx, BackwardContext &context) {
+  auto &state = context.states.at(this);
+  auto &grad_outputs = state.grad_outputs;
+  if (grad_output) {
+    core::DeviceGuard guard(grad_output->GetDevice());
+    if (!grad_outputs.at(grad_output_idx)) {
+      grad_outputs.at(grad_output_idx) = std::move(grad_output);
+    } else {
+      auto kernel = Dispatcher::Instance().GetKernel(
+          {grad_output->GetDevice().type(), "AccumulateGrad"});
+      kernel.Call<void>(grad_output, 1.0f, grad_outputs.at(grad_output_idx));
     }
-
-    // Call backward post-hooks
-    for (const auto &hook : backward_post_hooks_) {
-      if (hook) {
-        hook(this, grad_inputs, grad_outputs_);
+  }
+  ++state.reached;
+  if (state.reached == state.dependencies || state.dependencies == 0) {
+    std::vector<std::shared_ptr<Tensor>> grad_inputs(next_functions_.size());
+    auto first_gradient =
+        std::find_if(grad_outputs.begin(), grad_outputs.end(),
+                     [](const auto &gradient) { return gradient != nullptr; });
+    if (first_gradient != grad_outputs.end()) {
+      core::DeviceGuard guard((*first_gradient)->GetDevice());
+      for (size_t idx = 0; idx < output_metadata_.size(); ++idx) {
+        if (!grad_outputs[idx] && output_metadata_[idx]) {
+          const auto &metadata = *output_metadata_[idx];
+          grad_outputs[idx] = std::make_shared<Tensor>(
+              metadata.dims, metadata.dtype, metadata.device);
+          grad_outputs[idx]->Fill(0.0f);
+        }
       }
+      // Call backward pre-hooks
+      for (const auto &hook : backward_pre_hooks_) {
+        if (hook) {
+          hook(this, grad_outputs);
+        }
+      }
+
+      {
+        autograd::NoGradGuard no_grad;
+        // no_grad in autograd.Function.Backward()
+        grad_inputs = Backward(grad_outputs);
+      }
+
+      // Call backward post-hooks
+      for (const auto &hook : backward_post_hooks_) {
+        if (hook) {
+          hook(this, grad_inputs, grad_outputs);
+        }
+      }
+    } else if (dynamic_cast<AccumulateGrad *>(this)) {
+      grad_inputs = Backward(grad_outputs);
     }
 
     ctx_.ReleaseVariables();
-    grad_outputs_.clear();
-    grad_outputs_reached_ = 0;
-    dependencies_reached_ = 0;
+    grad_outputs.clear();
 
     CHECK_EQ(grad_inputs.size(), next_functions_.size());
     auto propagate_grad_input = [&](size_t idx) {
       auto grad_input = std::move(grad_inputs[idx]);
       auto &[next_function, output_idx] = next_functions_[idx];
-      if (grad_input && next_function) {
-        next_function->BackwardPartial(std::move(grad_input), output_idx);
+      if (next_function) {
+        next_function->BackwardPartial(std::move(grad_input), output_idx,
+                                       context);
       }
       grad_inputs[idx].reset();
     };
@@ -384,8 +431,6 @@ void Function::BackwardPartial(std::shared_ptr<Tensor> grad_output,
     next_functions_.clear();
   }
 }
-
-void Function::IncreaseDependenciesNumber() { ++dependencies_number_; }
 
 std::shared_ptr<infini_train::HookHandle> Function::RegisterForwardPreHook(
     FunctionPreHook hook) {
