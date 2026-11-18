@@ -1,5 +1,6 @@
 #include "infini_train/include/rng_tracker.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <cstring>
 #include <limits>
@@ -7,7 +8,6 @@
 #include <memory>
 #include <mutex>
 #include <ostream>
-#include <stdexcept>
 #include <string>
 #include <thread>
 #include <utility>
@@ -32,9 +32,7 @@ thread_local RngScope *current_scope = nullptr;
 std::unique_lock<std::recursive_mutex> LockTracker(
     std::recursive_mutex &mutex) {
   std::unique_lock<std::recursive_mutex> lock(mutex, std::try_to_lock);
-  if (!lock.owns_lock()) {
-    throw std::logic_error("RNG tracker is in use on another thread");
-  }
+  CHECK(lock.owns_lock()) << "RNG tracker is in use on another thread";
   return lock;
 }
 
@@ -55,9 +53,8 @@ RngTracker::~RngTracker() = default;
 
 void RngTracker::Add(const std::string &name, uint64_t seed) {
   auto lock = LockTracker(mutex_);
-  if (name.empty() || streams_.contains(name)) {
-    throw std::invalid_argument("RNG stream name must be nonempty and unique");
-  }
+  CHECK(!name.empty() && !streams_.contains(name))
+      << "RNG stream name must be nonempty and unique";
   streams_.emplace(name, RngStream{seed, {}});
 }
 
@@ -71,9 +68,7 @@ void RngTracker::ManualSeed(uint64_t seed) { ManualSeed(kDefaultStream, seed); }
 void RngTracker::ManualSeed(const std::string &name, uint64_t seed) {
   auto lock = LockTracker(mutex_);
   auto found = streams_.find(name);
-  if (found == streams_.end()) {
-    throw std::invalid_argument("Unknown RNG stream: " + name);
-  }
+  CHECK(found != streams_.end()) << "Unknown RNG stream: " << name;
   auto &stream = found->second;
   for (const auto &[device, generator] : stream.generators) {
     std::lock_guard<std::mutex> generator_lock(
@@ -114,9 +109,9 @@ std::shared_ptr<Tensor> RngTracker::GetState() const {
       bytes.insert(bytes.end(), data, data + state->SizeInBytes());
     }
   }
-  if (bytes.size() > static_cast<size_t>(std::numeric_limits<int64_t>::max())) {
-    throw std::length_error("RNG tracker state is too large");
-  }
+  CHECK(bytes.size() <=
+        static_cast<size_t>(std::numeric_limits<int64_t>::max()))
+      << "RNG tracker state is too large";
   auto state = std::make_shared<Tensor>(
       std::vector<int64_t>{static_cast<int64_t>(bytes.size())},
       DataType::kUINT8, Device());
@@ -128,37 +123,31 @@ void RngTracker::SetState(const Tensor &state) {
   auto lock = LockTracker(mutex_);
   constexpr char kStateMagic[] = "ITRNGTRK";
   constexpr uint64_t kStateVersion = 1;
-  if (!state.defined() || !state.GetDevice().IsCPU() ||
-      state.Dtype() != DataType::kUINT8 || state.Dims().size() != 1 ||
-      state.SizeInBytes() < sizeof(kStateMagic) - 1) {
-    throw std::invalid_argument(
-        "RNG tracker state must be a nonempty one-dimensional CPU UINT8 "
-        "tensor");
-  }
+  CHECK(state.defined() && state.GetDevice().IsCPU() &&
+        state.Dtype() == DataType::kUINT8 && state.Dims().size() == 1 &&
+        state.SizeInBytes() >= sizeof(kStateMagic) - 1)
+      << "RNG tracker state must be a nonempty one-dimensional CPU UINT8 "
+         "tensor";
   const auto *data = static_cast<const uint8_t *>(state.DataPtr());
   const size_t data_size = state.SizeInBytes();
-  if (std::memcmp(data, kStateMagic, sizeof(kStateMagic) - 1) != 0) {
-    throw std::invalid_argument("Invalid RNG tracker state magic");
-  }
+  CHECK(std::memcmp(data, kStateMagic, sizeof(kStateMagic) - 1) == 0)
+      << "Invalid RNG tracker state magic";
   size_t offset = sizeof(kStateMagic) - 1;
   auto read_uint64 = [&] {
-    if (data_size - offset < sizeof(uint64_t)) {
-      throw std::invalid_argument("Truncated RNG tracker state");
-    }
+    CHECK(data_size - offset >= sizeof(uint64_t))
+        << "Truncated RNG tracker state";
     uint64_t value = 0;
     for (int shift = 0; shift < 64; shift += 8) {
       value |= static_cast<uint64_t>(data[offset++]) << shift;
     }
     return value;
   };
-  if (read_uint64() != kStateVersion) {
-    throw std::invalid_argument("Unsupported RNG tracker state version");
-  }
+  CHECK(read_uint64() == kStateVersion)
+      << "Unsupported RNG tracker state version";
   const uint64_t stream_count = read_uint64();
-  if (stream_count == 0 ||
-      stream_count > (data_size - offset) / (3 * sizeof(uint64_t) + 1)) {
-    throw std::invalid_argument("Invalid RNG tracker stream count");
-  }
+  CHECK(stream_count != 0 &&
+        stream_count <= (data_size - offset) / (3 * sizeof(uint64_t) + 1))
+      << "Invalid RNG tracker stream count";
 
   struct StreamState {
     uint64_t seed;
@@ -167,60 +156,48 @@ void RngTracker::SetState(const Tensor &state) {
   std::map<std::string, StreamState> states;
   for (uint64_t i = 0; i < stream_count; ++i) {
     const uint64_t name_size = read_uint64();
-    if (name_size == 0 || name_size > data_size - offset) {
-      throw std::invalid_argument("Invalid RNG stream name length");
-    }
+    CHECK(name_size != 0 && name_size <= data_size - offset)
+        << "Invalid RNG stream name length";
     std::string name(reinterpret_cast<const char *>(data + offset),
                      static_cast<size_t>(name_size));
     offset += static_cast<size_t>(name_size);
     StreamState stream_state{read_uint64(), {}};
     auto [found, inserted] =
         states.emplace(std::move(name), std::move(stream_state));
-    if (!inserted) {
-      throw std::invalid_argument("Duplicate RNG stream name");
-    }
+    CHECK(inserted) << "Duplicate RNG stream name";
     const uint64_t device_count = read_uint64();
-    if (device_count > (data_size - offset) / (3 * sizeof(uint64_t) + 1)) {
-      throw std::invalid_argument("Invalid RNG stream device count");
-    }
+    CHECK(device_count <= (data_size - offset) / (3 * sizeof(uint64_t) + 1))
+        << "Invalid RNG stream device count";
     for (uint64_t j = 0; j < device_count; ++j) {
       const uint64_t type = read_uint64();
       const uint64_t index = read_uint64();
       const uint64_t byte_count = read_uint64();
-      if (type >= static_cast<uint64_t>(Device::DeviceType::kCount) ||
-          index > static_cast<uint64_t>(std::numeric_limits<int8_t>::max())) {
-        throw std::invalid_argument("Invalid RNG state device");
-      }
+      CHECK(type < static_cast<uint64_t>(Device::DeviceType::kCount) &&
+            index <= static_cast<uint64_t>(std::numeric_limits<int8_t>::max()))
+          << "Invalid RNG state device";
       const auto device_type = static_cast<Device::DeviceType>(type);
       GeneratorBackendRegistry::Instance().Get(device_type);
-      if (index >= static_cast<uint64_t>(
-                       core::GetDeviceGuardImpl(device_type)->DeviceCount())) {
-        throw std::invalid_argument(
-            "RNG tracker state has an invalid device index");
-      }
-      if (byte_count == 0 || byte_count > data_size - offset ||
-          byte_count >
-              static_cast<uint64_t>(std::numeric_limits<int64_t>::max())) {
-        throw std::invalid_argument("Invalid RNG generator state length");
-      }
+      CHECK(index < static_cast<uint64_t>(
+                        core::GetDeviceGuardImpl(device_type)->DeviceCount()))
+          << "RNG tracker state has an invalid device index";
+      CHECK(byte_count != 0 && byte_count <= data_size - offset &&
+            byte_count <=
+                static_cast<uint64_t>(std::numeric_limits<int64_t>::max()))
+          << "Invalid RNG generator state length";
       const DeviceKey key{device_type, static_cast<int8_t>(index)};
-      if (!found->second.generator_ranges
-               .emplace(key, std::pair{offset, static_cast<size_t>(byte_count)})
-               .second) {
-        throw std::invalid_argument("Duplicate RNG state device");
-      }
+      const bool inserted_device =
+          found->second.generator_ranges
+              .emplace(key, std::pair{offset, static_cast<size_t>(byte_count)})
+              .second;
+      CHECK(inserted_device) << "Duplicate RNG state device";
       offset += static_cast<size_t>(byte_count);
     }
   }
-  if (offset != data_size || !states.contains(kDefaultStream)) {
-    throw std::invalid_argument(
-        "RNG tracker state has trailing bytes or no default stream");
-  }
+  CHECK(offset == data_size && states.contains(kDefaultStream))
+      << "RNG tracker state has trailing bytes or no default stream";
   for (auto *scope = current_scope; scope; scope = scope->previous_) {
-    if (scope->tracker_ == this && !states.contains(scope->name_)) {
-      throw std::invalid_argument(
-          "Cannot restore a state that removes an active RNG stream");
-    }
+    CHECK(scope->tracker_ != this || states.contains(scope->name_))
+        << "Cannot restore a state that removes an active RNG stream";
   }
 
   Streams restored_streams;
@@ -261,9 +238,7 @@ RngScope::RngScope(RngTracker &tracker, const std::string &name)
       previous_(current_scope),
       thread_(std::this_thread::get_id()),
       lock_(LockTracker(tracker_->mutex_)) {
-  if (!tracker_->streams_.contains(name_)) {
-    throw std::invalid_argument("Unknown RNG stream: " + name_);
-  }
+  CHECK(tracker_->streams_.contains(name_)) << "Unknown RNG stream: " << name_;
   current_scope = this;
 }
 

@@ -74,6 +74,7 @@ TEST_F(GeneratorCudaTest, ScopedSeedAndSnapshotIncludeDevicesCreatedLater) {
 
 TEST_F(GeneratorCudaTest,
        TrackerRejectsCudaStateWithoutChangingLiveGenerators) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   RngTracker tracker(9033);
   RngScope scope(tracker);
   nn::function::Rand({19}, DataType::kFLOAT32, cuda0_);
@@ -84,7 +85,9 @@ TEST_F(GeneratorCudaTest,
   auto reference = selected.Clone();
   const auto cuda_state = snapshot->To(cuda0_);
 
-  EXPECT_THROW(tracker.SetState(cuda_state), std::invalid_argument);
+  EXPECT_DEATH(
+      tracker.SetState(cuda_state),
+      "RNG tracker state must be a nonempty one-dimensional CPU UINT8 tensor");
   EXPECT_EQ(selected, GetDefaultGenerator(cuda0_));
   EXPECT_EQ(before, TensorBytes(selected.get_state()));
   EXPECT_EQ(bytes, TensorBytes(tracker.GetState()));
@@ -126,6 +129,7 @@ TEST_F(GeneratorCudaTest, StateRejectsCudaAndForeignInput) {
 }
 
 TEST_F(GeneratorCudaTest, CrossBackendGeneratorsAreRejected) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   const Device cpu;
   const auto cpu_generator = CreateGenerator(cpu, 8001);
   const auto cuda_generator = CreateGenerator(cuda0_, 8002);
@@ -137,20 +141,21 @@ TEST_F(GeneratorCudaTest, CrossBackendGeneratorsAreRejected) {
   cpu_input->Fill(1.0f);
   cuda_input->Fill(1.0f);
 
-  EXPECT_THROW(nn::function::Rand({8}, DataType::kFLOAT32, cpu, cuda_generator),
-               std::invalid_argument);
-  EXPECT_THROW(
+  EXPECT_DEATH(nn::function::Rand({8}, DataType::kFLOAT32, cpu, cuda_generator),
+               "Generator device mismatch");
+  EXPECT_DEATH(
       nn::function::Rand({8}, DataType::kFLOAT32, cuda0_, cpu_generator),
-      std::invalid_argument);
-  EXPECT_THROW(nn::function::Dropout(cpu_input, 0.25, true, cuda_generator),
-               std::invalid_argument);
-  EXPECT_THROW(nn::function::Dropout(cuda_input, 0.25, true, cpu_generator),
-               std::invalid_argument);
+      "Generator device mismatch");
+  EXPECT_DEATH(nn::function::Dropout(cpu_input, 0.25, true, cuda_generator),
+               "Generator device mismatch");
+  EXPECT_DEATH(nn::function::Dropout(cuda_input, 0.25, true, cpu_generator),
+               "Generator device mismatch");
 }
 
 // Regression for the device-index check: a generator bound to cuda:0 must not
 // drive a cuda:1 tensor, and the rejected calls must not advance its state.
 TEST_F(GeneratorCudaTest, CudaGeneratorRejectsAnotherCudaDevice) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   REQUIRE_MIN_DEVICES(2);
   const Device cuda1(Device::DeviceType::kCUDA, 1);
   auto generator = CreateGenerator(cuda0_, 8401);
@@ -160,12 +165,12 @@ TEST_F(GeneratorCudaTest, CudaGeneratorRejectsAnotherCudaDevice) {
                                         DataType::kFLOAT32, cuda1);
   input->Fill(1.0f);
 
-  EXPECT_THROW(nn::function::Rand({257}, DataType::kFLOAT32, cuda1, generator),
-               std::invalid_argument);
-  EXPECT_THROW(nn::function::Randn({257}, DataType::kFLOAT32, cuda1, generator),
-               std::invalid_argument);
-  EXPECT_THROW(nn::function::Dropout(input, 0.25, true, generator),
-               std::invalid_argument);
+  EXPECT_DEATH(nn::function::Rand({257}, DataType::kFLOAT32, cuda1, generator),
+               "Generator device mismatch");
+  EXPECT_DEATH(nn::function::Randn({257}, DataType::kFLOAT32, cuda1, generator),
+               "Generator device mismatch");
+  EXPECT_DEATH(nn::function::Dropout(input, 0.25, true, generator),
+               "Generator device mismatch");
 
   EXPECT_EQ(state_before, TensorBytes(generator.get_state()));
 }

@@ -1,8 +1,6 @@
 #include <cstdint>
 #include <memory>
 #include <optional>
-#include <stdexcept>
-#include <string>
 #include <vector>
 
 #include "gtest/gtest.h"
@@ -34,14 +32,19 @@ TEST_F(GeneratorCpuTest, ScopedPublicAndBackendGettersSelectTheSameGenerator) {
 }
 
 #ifndef USE_CUDA
-TEST_F(GeneratorCpuTest, MissingCudaBackendThrowsInsideAndOutsideScopes) {
+TEST_F(GeneratorCpuTest, MissingCudaBackendFailsInsideAndOutsideScopes) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   const Device explicit_cuda(Device::DeviceType::kCUDA, 0);
   const Device current_cuda(Device::DeviceType::kCUDA, -1);
-  EXPECT_THROW(GetDefaultGenerator(explicit_cuda), std::invalid_argument);
-  EXPECT_THROW(GetDefaultGenerator(current_cuda), std::invalid_argument);
+  EXPECT_DEATH(GetDefaultGenerator(explicit_cuda),
+               "No GeneratorBackend registered for device type");
+  EXPECT_DEATH(GetDefaultGenerator(current_cuda),
+               "No GeneratorBackend registered for device type");
   RngScope scope(9056);
-  EXPECT_THROW(GetDefaultGenerator(explicit_cuda), std::invalid_argument);
-  EXPECT_THROW(GetDefaultGenerator(current_cuda), std::invalid_argument);
+  EXPECT_DEATH(GetDefaultGenerator(explicit_cuda),
+               "No GeneratorBackend registered for device type");
+  EXPECT_DEATH(GetDefaultGenerator(current_cuda),
+               "No GeneratorBackend registered for device type");
   EXPECT_EQ(GetDefaultGenerator(Device()).current_seed(), 9056U);
 }
 #endif

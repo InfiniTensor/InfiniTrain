@@ -97,7 +97,7 @@ std::array<Samples, 2> InterleavedSamples(const Device &device, bool reverse) {
 
 }  // namespace
 
-class RngTrackerTest : public infini_train::test::InfiniTrainTest {};
+using RngTrackerTest = infini_train::test::InfiniTrainTest;
 
 TEST_P(RngTrackerTest, IndependentTrackersRetainTheirOwnSequences) {
   const Device device = GetDevice();
@@ -280,6 +280,7 @@ TEST_P(RngTrackerTest, CopiedStateRestoresAllStreamsAfterTrackerDestruction) {
 }
 
 TEST_P(RngTrackerTest, InvalidSerializedStatePreservesLiveGenerators) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   const Device device = GetDevice();
   RngTracker tracker(9033);
   RngScope scope(tracker);
@@ -289,39 +290,48 @@ TEST_P(RngTrackerTest, InvalidSerializedStatePreservesLiveGenerators) {
   const auto valid = tracker.GetState();
   const auto bytes = TensorBytes(valid);
   auto reference = selected.Clone();
-  auto expect_rejected = [&](const Tensor &state) {
-    EXPECT_THROW(tracker.SetState(state), std::invalid_argument);
+  auto expect_rejected = [&](const Tensor &state, const char *error) {
+    EXPECT_DEATH(tracker.SetState(state), error);
     EXPECT_EQ(selected, GetDefaultGenerator(device));
     EXPECT_EQ(before, TensorBytes(selected.get_state()));
     EXPECT_EQ(bytes, TensorBytes(tracker.GetState()));
   };
-  expect_rejected(Tensor({1}, DataType::kFLOAT32, Device()));
   expect_rejected(
-      Tensor(*valid, 0, {static_cast<int64_t>(valid->NumElements() - 1)}));
+      Tensor({1}, DataType::kFLOAT32, Device()),
+      "RNG tracker state must be a nonempty one-dimensional CPU UINT8 tensor");
+  expect_rejected(
+      Tensor(*valid, 0, {static_cast<int64_t>(valid->NumElements() - 1)}),
+      "Invalid RNG generator state length");
   EXPECT_EQ(SampleScript(device, reference), SampleScript(device));
 }
 
 TEST_P(RngTrackerTest, InvalidStreamOperationsPreserveTheBinding) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   const Device device = GetDevice();
   RngTracker tracker(9017);
   EXPECT_TRUE(tracker.Contains("default"));
   EXPECT_FALSE(tracker.Contains("missing"));
-  EXPECT_THROW(tracker.Add("", 1), std::invalid_argument);
-  EXPECT_THROW(tracker.Add("default", 1), std::invalid_argument);
-  EXPECT_THROW(tracker.ManualSeed("missing", 1), std::invalid_argument);
+  EXPECT_DEATH(tracker.Add("", 1),
+               "RNG stream name must be nonempty and unique");
+  EXPECT_DEATH(tracker.Add("default", 1),
+               "RNG stream name must be nonempty and unique");
+  EXPECT_DEATH(tracker.ManualSeed("missing", 1), "Unknown RNG stream: missing");
   const auto snapshot = tracker.GetState();
   tracker.Add("later", 9018);
   EXPECT_TRUE(tracker.Contains("later"));
   RngScope outer(tracker);
   Generator selected = GetDefaultGenerator(device);
-  EXPECT_THROW(RngScope missing(tracker, "missing"), std::invalid_argument);
+  EXPECT_DEATH(RngScope missing(tracker, "missing"),
+               "Unknown RNG stream: missing");
   EXPECT_EQ(selected, GetDefaultGenerator(device));
   {
     RngScope inner(tracker, "later");
-    EXPECT_THROW(tracker.SetState(*snapshot), std::invalid_argument);
+    EXPECT_DEATH(tracker.SetState(*snapshot),
+                 "Cannot restore a state that removes an active RNG stream");
     EXPECT_EQ(GetDefaultGenerator(device).current_seed(), 9018U);
     RngScope other(9019);
-    EXPECT_THROW(tracker.SetState(*snapshot), std::invalid_argument);
+    EXPECT_DEATH(tracker.SetState(*snapshot),
+                 "Cannot restore a state that removes an active RNG stream");
   }
   tracker.SetState(*snapshot);
   EXPECT_FALSE(tracker.Contains("later"));
@@ -390,6 +400,7 @@ TEST_P(RngTrackerTest, IndependentTrackersCanSampleConcurrently) {
 
 TEST_P(RngTrackerTest,
        TrackerRejectsConcurrentBindingAndCanMoveBetweenThreads) {
+  ::testing::GTEST_FLAG(death_test_style) = "threadsafe";
   const Device device = GetDevice();
   RngTracker tracker(9021);
   auto reference = CreateGenerator(device, 9021);
@@ -400,24 +411,34 @@ TEST_P(RngTrackerTest,
       RngScope inner(tracker);
       EXPECT_EQ(SampleScript(device, reference), SampleScript(device));
     }
-    auto conflicting_scope = std::async(std::launch::async, [&] {
-      try {
-        RngScope scope(tracker);
-      } catch (const std::logic_error &) {
-        return true;
-      }
-      return false;
+  }
+  {
+    std::binary_semaphore held(0);
+    std::binary_semaphore release(0);
+    std::thread holder([&] {
+      RngScope scope(tracker);
+      held.release();
+      release.acquire();
     });
-    EXPECT_TRUE(conflicting_scope.get());
-    auto conflicting_seed = std::async(std::launch::async, [&] {
-      try {
-        tracker.ManualSeed(0);
-      } catch (const std::logic_error &) {
-        return true;
-      }
-      return false;
+    held.acquire();
+    EXPECT_DEATH(RngScope conflicting(tracker),
+                 "RNG tracker is in use on another thread");
+    release.release();
+    holder.join();
+  }
+  {
+    std::binary_semaphore held(0);
+    std::binary_semaphore release(0);
+    std::thread holder([&] {
+      RngScope scope(tracker);
+      held.release();
+      release.acquire();
     });
-    EXPECT_TRUE(conflicting_seed.get());
+    held.acquire();
+    EXPECT_DEATH(tracker.ManualSeed(0),
+                 "RNG tracker is in use on another thread");
+    release.release();
+    holder.join();
   }
   auto next_thread = std::async(std::launch::async, [&] {
     RngScope scope(tracker);

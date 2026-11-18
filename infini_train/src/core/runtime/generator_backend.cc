@@ -1,7 +1,6 @@
 #include "infini_train/include/core/runtime/generator_backend.h"
 
 #include <ostream>
-#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -31,11 +30,9 @@ void GeneratorBackendRegistry::Register(
 
 GeneratorBackend &GeneratorBackendRegistry::Get(Device::DeviceType type) const {
   auto it = backends_.find(type);
-  if (it == backends_.end()) {
-    throw std::invalid_argument(
-        "No GeneratorBackend registered for device type " +
-        std::to_string(static_cast<int>(type)));
-  }
+  CHECK(it != backends_.end())
+      << "No GeneratorBackend registered for device type "
+      << std::to_string(static_cast<int>(type));
   return *it->second;
 }
 
