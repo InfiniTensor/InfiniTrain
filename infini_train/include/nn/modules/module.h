@@ -158,6 +158,16 @@ class Module : public std::enable_shared_from_this<Module> {
   std::vector<ModulePostHook> backward_post_hooks_;
 
  private:
+  using TensorConversionMemo =
+      std::unordered_map<const Tensor *, std::pair<std::shared_ptr<Tensor>,
+                                                   std::shared_ptr<Tensor>>>;
+
+  void ConvertTensors(const std::function<std::shared_ptr<Tensor>(
+                          const std::shared_ptr<Tensor> &)> &convert,
+                      TensorConversionMemo &converted,
+                      std::unordered_set<Module *> &visited,
+                      const Device *device);
+
   friend std::vector<std::shared_ptr<Module>> parallel::function::Replicate(
       const std::shared_ptr<Module> &network,
       const std::vector<Device> &devices);
