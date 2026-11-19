@@ -5,6 +5,9 @@
 #include <vector>
 
 #include "infini_train/include/autograd/activations.h"
+#include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
+#include "infini_train/include/dispatcher.h"
 #include "infini_train/include/nn/functional.h"
 #include "infini_train/include/tensor.h"
 
@@ -17,6 +20,13 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Forward(
 std::vector<std::shared_ptr<Tensor>> NewGELU::Forward(
     const std::vector<std::shared_ptr<Tensor>> &x) {
   auto &input = x[0];
+  if (input->Dtype() == DataType::kFLOAT32 && input->IsContiguous() &&
+      Dispatcher::Instance().HasKernel(
+          {input->GetDevice().type(), "NewGELUForward"}) &&
+      Dispatcher::Instance().HasKernel(
+          {input->GetDevice().type(), "NewGELUBackward"})) {
+    return std::make_shared<autograd::NewGELU>()->Apply(x);
+  }
   return {
       0.5 * input *
       (1.0 + function::Tanh(std::sqrt(2.0 / M_PI) *

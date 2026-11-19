@@ -1,6 +1,8 @@
 #include "infini_train/include/autograd/activations.h"
 
+#include <cassert>
 #include <ostream>
+#include <utility>
 
 #include "glog/logging.h"
 
@@ -37,6 +39,37 @@ std::vector<std::shared_ptr<Tensor>> Sigmoid::Backward(
   auto device = output->GetDevice().type();
   return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
       {device, "SigmoidBackward"}, output, grad_output)};
+}
+
+std::vector<std::shared_ptr<Tensor>> NewGELU::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &inputs) {
+  assert(inputs.size() == 1);
+  const auto &input = inputs[0];
+  auto [output, saved_tanh] =
+      Dispatcher::Instance()
+          .Call<std::pair<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>>>(
+              {input->GetDevice().type(), "NewGELUForward"}, input);
+  saved_tanh_ = std::move(saved_tanh);
+  return {output};
+}
+
+void NewGELU::SetupContext(const std::vector<std::shared_ptr<Tensor>> &inputs,
+                           const std::vector<std::shared_ptr<Tensor>> &) {
+  ctx_.SaveForBackward({inputs[0], saved_tanh_});
+  saved_tanh_.reset();
+}
+
+std::vector<std::shared_ptr<Tensor>> NewGELU::Backward(
+    const std::vector<std::shared_ptr<Tensor>> &gradients) {
+  assert(gradients.size() == 1);
+  const auto saved = ctx_.GetSavedTensors();
+  auto gradient = gradients[0]->Contiguous();
+  if (gradient->Dtype() != saved[0]->Dtype()) {
+    gradient = std::make_shared<Tensor>(gradient->To(saved[0]->Dtype()));
+  }
+  return {Dispatcher::Instance().Call<std::shared_ptr<Tensor>>(
+      {saved[0]->GetDevice().type(), "NewGELUBackward"}, saved[0], saved[1],
+      gradient)};
 }
 
 std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(

@@ -25,6 +25,26 @@ class Sigmoid : public Function {
       const std::vector<std::shared_ptr<Tensor>> &grad_outputs) override;
 };
 
+class NewGELU : public Function {
+ public:
+  static constexpr char kType[] = "NewGELUFunction";
+
+  NewGELU() : Function(kType) {}
+
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &inputs) override;
+
+  void SetupContext(
+      const std::vector<std::shared_ptr<Tensor>> &inputs,
+      const std::vector<std::shared_ptr<Tensor>> &outputs) override;
+
+  std::vector<std::shared_ptr<Tensor>> Backward(
+      const std::vector<std::shared_ptr<Tensor>> &gradients) override;
+
+ private:
+  std::shared_ptr<Tensor> saved_tanh_;
+};
+
 class SwiGLU : public Function {
  public:
   static constexpr char kType[] = "SwiGLUFunction";
