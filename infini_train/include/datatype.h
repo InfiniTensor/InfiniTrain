@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 
 namespace infini_train {
@@ -98,6 +99,12 @@ enum class DataType : int8_t {
   kFLOAT32,
   kFLOAT64,
 };
+
+inline constexpr std::string_view kDtypeFP32 = "float32";
+inline constexpr std::string_view kDtypeBF16 = "bfloat16";
+
+/// Parses the dtype names accepted by example command-line flags.
+DataType ParseDtype(std::string_view dtype);
 
 inline const std::unordered_map<DataType, size_t> kDataTypeToSize = {
     {DataType::kBOOL, 1},     {DataType::kUINT8, 1},   {DataType::kINT8, 1},
