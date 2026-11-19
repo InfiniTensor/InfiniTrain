@@ -1,0 +1,44 @@
+name: CPU Link Smoke
+
+on:
+  pull_request:
+  push:
+    branches:
+      - master
+
+permissions:
+  contents: read
+
+concurrency:
+  group: cpu-link-smoke-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cpu-link-smoke:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Initialize submodules
+        run: |
+          git -c url."https://github.com/".insteadOf=git@github.com: submodule update --init --recursive
+
+      - name: Install build tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-18 ninja-build
+
+      - name: Configure without OpenMP
+        run: |
+          cmake -S . -B build/link -G Ninja \
+            -DCMAKE_CXX_COMPILER=clang++-18 \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DUSE_CUDA=OFF -DUSE_NCCL=OFF -DUSE_OMP=OFF -DBUILD_TEST=ON
+
+      - name: Link the example and standalone consumer
+        run: cmake --build build/link --target mnist test_thread_link -j2
+
+      - name: Run the thread consumer
+        run: ctest --test-dir build/link -R '^Link.ThreadDependency$' --output-on-failure
