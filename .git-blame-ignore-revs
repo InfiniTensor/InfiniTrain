@@ -4,3 +4,6 @@
 
 # Apply clang-format 16.0.6 to C/C++/CUDA sources and Black to Python scripts.
 30732097c4ab0421939aab1d41248d28a64d4e68
+
+# Format changes introduced by the generator/RNG branch.
+58b899ec75f2b92819c5c3254566c1a553389f40

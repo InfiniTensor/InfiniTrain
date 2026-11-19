@@ -129,6 +129,8 @@ const void *Tensor::DataPtr() const {
   return reinterpret_cast<const uint8_t *>(buffer_->DataPtr()) + offset_;
 }
 
+bool Tensor::defined() const { return buffer_ != nullptr; }
+
 size_t Tensor::SizeInBytes() const {
   return kDataTypeToSize.at(dtype_) * num_elements_;
 }
@@ -599,7 +601,7 @@ std::shared_ptr<Tensor> Tensor::Outer(const std::shared_ptr<Tensor> &other) {
 
 // distribution
 std::shared_ptr<Tensor> Tensor::Uniform(float from, float to,
-                                        std::optional<std::mt19937> generator) {
+                                        std::optional<Generator> generator) {
   return nn::init::Uniform(shared_from_this(), from, to, generator);
 }
 

@@ -67,6 +67,7 @@ class DistributedDataParallel : public nn::Module {
       const std::vector<std::shared_ptr<Tensor>> &params);
   void OnGradReady(const std::shared_ptr<Tensor> &param);
   void SetIsLastMicrobatch(bool is_last_microbatch);
+  void SynchronizeModuleState();
 
  private:
   // Whether to enable grad sync on last microbatch (DDP naive path)

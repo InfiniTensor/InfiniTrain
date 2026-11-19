@@ -1,0 +1,8 @@
+add_executable(test_rng_tensor_parallel test_rng_tensor_parallel.cc)
+target_compile_options(test_rng_tensor_parallel PRIVATE -Wno-error)
+target_link_libraries(test_rng_tensor_parallel PRIVATE GTest::gtest)
+target_include_directories(test_rng_tensor_parallel PRIVATE ${glog_SOURCE_DIR}/src)
+link_infini_train_exe(test_rng_tensor_parallel)
+gtest_discover_tests(test_rng_tensor_parallel
+  PROPERTIES LABELS cpu TIMEOUT 40
+)
