@@ -2,9 +2,23 @@
 
 #include <bit>
 #include <cstdint>
+#include <ostream>
 #include <unordered_map>
 
+#include "glog/logging.h"
+
 namespace infini_train {
+
+DataType ParseDtype(std::string_view dtype) {
+  if (dtype == kDtypeFP32) {
+    return DataType::kFLOAT32;
+  }
+  if (dtype == kDtypeBF16) {
+    return DataType::kBFLOAT16;
+  }
+  LOG(FATAL) << "Datatype " << dtype << " not supported.";
+  return DataType::kFLOAT32;
+}
 
 namespace detail {
 
