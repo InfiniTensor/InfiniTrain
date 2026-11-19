@@ -73,6 +73,11 @@ endif()
 file(GLOB_RECURSE SRC ${PROJECT_SOURCE_DIR}/infini_train/src/*.cc)
 list(FILTER SRC EXCLUDE REGEX ".*kernels/cpu/.*")
 
+set(RENDEZVOUS_SERVER_SOURCE
+  ${PROJECT_SOURCE_DIR}/infini_train/src/core/ccl/rendezvous_server.cc
+)
+list(REMOVE_ITEM SRC ${RENDEZVOUS_SERVER_SOURCE})
+
 # Exclude backend-specific runtime/ccl translation units when the corresponding
 # backend is disabled. This keeps each build self-contained and avoids pulling
 # in headers (e.g. <cuda_runtime.h> / <mcr/mc_runtime.h>) that are not on the
@@ -85,6 +90,18 @@ endif()
 
 # CPU kernels (*.cc)
 file(GLOB_RECURSE CPU_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/kernels/cpu/*.cc)
+
+# ------------------------------------------------------------------------------
+# Rendezvous library
+# ------------------------------------------------------------------------------
+
+add_library(infini_train_rendezvous STATIC ${RENDEZVOUS_SERVER_SOURCE})
+add_library(InfiniTrain::rendezvous ALIAS infini_train_rendezvous)
+target_compile_features(infini_train_rendezvous PUBLIC cxx_std_20)
+target_include_directories(infini_train_rendezvous PUBLIC
+  "$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}>"
+)
+target_link_libraries(infini_train_rendezvous PUBLIC glog)
 
 # ------------------------------------------------------------------------------
 # CPU kernels library
