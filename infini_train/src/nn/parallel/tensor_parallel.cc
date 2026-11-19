@@ -859,6 +859,7 @@ VocabParallelEmbedding::VocabParallelEmbedding(int64_t num_embeddings,
           std::vector<int64_t>{vocab_size_per_partition_, embedding_dim_},
           DataType::kFLOAT32, device_)
           ->RequiresGrad();
+  init::Normal(parameters_[kParamWeightName]);
 }
 
 std::vector<std::shared_ptr<Tensor>> VocabParallelEmbedding::Forward(
