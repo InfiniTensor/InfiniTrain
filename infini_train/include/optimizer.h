@@ -65,6 +65,7 @@ inline constexpr std::string_view kAdamOptimizerPrefix = "adam.";
 inline constexpr std::string_view kAdamFirstMomentPrefix = "adam.m.";
 inline constexpr std::string_view kAdamSecondMomentPrefix = "adam.v.";
 inline constexpr std::string_view kAdamStepKey = "adam.t";
+inline constexpr std::string_view kAdamParameterStepPrefix = "adam.step.";
 
 class SGD : public Optimizer {
  public:
@@ -102,6 +103,8 @@ class Adam : public Optimizer {
 
  private:
   int64_t t_;
+
+  std::vector<int64_t> steps_;
   const float beta1_;
   const float beta2_;
   const float eps_;

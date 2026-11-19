@@ -46,6 +46,8 @@ ShardedStateDict BuildOptimizerShardedStateDict(
       state_prefix = optimizers::kAdamFirstMomentPrefix;
     } else if (local_key.starts_with(optimizers::kAdamSecondMomentPrefix)) {
       state_prefix = optimizers::kAdamSecondMomentPrefix;
+    } else if (local_key.starts_with(optimizers::kAdamParameterStepPrefix)) {
+      state_prefix = optimizers::kAdamParameterStepPrefix;
     } else {
       CHECK(false) << "Unsupported optimizer state key: " << local_key;
     }
@@ -68,7 +70,10 @@ ShardedStateDict BuildOptimizerShardedStateDict(
     }
     const auto global_key = std::string(state_prefix) + global_parameter_key;
 
-    auto info = model_state.tensors.at(global_parameter_key);
+    auto info =
+        state_prefix == optimizers::kAdamParameterStepPrefix
+            ? MakeShardedTensor(global_key, tensor->Dtype(), tensor->Dims())
+            : model_state.tensors.at(global_parameter_key);
     info.key = global_key;
     info.local_key = local_key;
     info.local_tensor = nullptr;

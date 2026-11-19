@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <stdint.h>
 
+#include <map>
 #include <memory>
 #include <string>
 #include <unordered_map>
@@ -8,9 +9,11 @@
 
 #include "gtest/gtest.h"
 
+#include "infini_train/include/checkpoint/save_planner.h"
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
 #include "infini_train/include/optimizer.h"
+#include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
 #include "tests/common/test_utils.h"
@@ -81,6 +84,13 @@ TEST_P(OptimizerStateTest, AdamStateDictRoundTrip) {
       continue;
     }
     ASSERT_TRUE(restored.count(key)) << "Missing optimizer state key: " << key;
+    if (key.starts_with(optimizers::kAdamParameterStepPrefix)) {
+      const auto saved_step = tensor->To(Device());
+      const auto restored_step = restored.at(key)->To(Device());
+      EXPECT_EQ(*static_cast<const int64_t *>(saved_step.DataPtr()),
+                *static_cast<const int64_t *>(restored_step.DataPtr()));
+      continue;
+    }
     auto s_cpu = tensor->To(Device());
     auto r_cpu = restored.at(key)->To(Device());
     EXPECT_EQ(s_cpu.Dims(), r_cpu.Dims()) << "Shape mismatch for " << key;
@@ -125,3 +135,30 @@ TEST_P(OptimizerStateTest, SGDStateDictEmpty) {
 }
 
 INFINI_TRAIN_REGISTER_TEST(OptimizerStateTest);
+
+TEST_P(OptimizerStateTest, ParameterStepUsesScalarCheckpointMetadata) {
+  auto parameter = std::make_shared<Tensor>(std::vector<int64_t>{2, 3},
+                                            DataType::kFLOAT32, GetDevice());
+  NamedParameterList parameters{{"local.weight", parameter}};
+  optimizers::Adam adam(parameters, 0.001);
+  auto info = MakeShardedTensor("global.weight", DataType::kFLOAT32, {2, 3});
+  info.global_shape = {4, 3};
+  info.global_offset = {2, 0};
+  info.axis_fragmentations = {2, 1};
+  info.local_tensor = parameter.get();
+  ShardedStateDict model_state;
+  model_state.tensors.emplace(info.key, info);
+  const auto state = checkpoint::BuildOptimizerShardedStateDict(
+      model_state, adam.StateDict(), parameters);
+  const auto &step = state.tensors.at("adam.step.global.weight");
+  EXPECT_EQ(step.dtype, DataType::kINT64);
+  EXPECT_EQ(step.local_key, "adam.step.local.weight");
+  EXPECT_TRUE(step.local_shape.empty());
+  EXPECT_TRUE(step.global_shape.empty());
+  EXPECT_TRUE(step.global_offset.empty());
+  EXPECT_TRUE(step.axis_fragmentations.empty());
+  const auto &moment = state.tensors.at("adam.m.global.weight");
+  EXPECT_EQ(moment.local_shape, info.local_shape);
+  EXPECT_EQ(moment.global_shape, info.global_shape);
+  EXPECT_EQ(moment.global_offset, info.global_offset);
+}
