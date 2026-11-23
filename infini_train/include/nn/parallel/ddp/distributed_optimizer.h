@@ -34,8 +34,6 @@ class DistributedOptimizer final : public infini_train::Optimizer {
                        const std::vector<std::shared_ptr<Module>> &model_chunks,
                        size_t ddp_world_size, size_t ddp_rank);
 
-  void Step() override;
-
   void ZeroGrad(bool set_to_none = true) override;
 
   std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
@@ -50,6 +48,9 @@ class DistributedOptimizer final : public infini_train::Optimizer {
 
   virtual void set_learning_rate(float lr) override;
   virtual float learning_rate() const override;
+
+ protected:
+  void StepImpl() override;
 
  private:
   using AddShardParam = std::function<void(const std::shared_ptr<Tensor> &,

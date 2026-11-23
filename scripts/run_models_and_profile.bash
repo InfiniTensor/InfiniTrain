@@ -394,6 +394,15 @@ args_string_for_test() {
        sed "s|@CKPT_ROOT_DIR@|${CKPT_ROOT_DIR}|g"
 }
 
+group_runs_model() {
+    local group_idx="$1"
+    local model_name="$2"
+    jq -e --argjson g "$group_idx" --arg model "$model_name" '
+        .test_groups[$g].models as $models
+        | $models == null or ($models | index($model) != null)
+    ' "$CONFIG_FILE" >/dev/null
+}
+
 tag_enabled_for_model() {
     local tag="$1"
     local enabled_tags="$2"
@@ -415,6 +424,7 @@ tag_enabled_for_model() {
 
 model_has_selected_group() {
     local enabled_tags="$1"
+    local model_name="$2"
 
     for ((gi=0; gi<num_groups; ++gi)); do
         local group_tag
@@ -422,7 +432,7 @@ model_has_selected_group() {
         if [[ ${#SELECTED_TAGS[@]} -gt 0 && -z "${SELECTED_TAGS[$group_tag]:-}" ]]; then
             continue
         fi
-        if tag_enabled_for_model "$group_tag" "$enabled_tags"; then
+        if tag_enabled_for_model "$group_tag" "$enabled_tags" && group_runs_model "$gi" "$model_name"; then
             return 0
         fi
     done
@@ -430,7 +440,7 @@ model_has_selected_group() {
 }
 
 check_model_inputs() {
-    if model_has_selected_group "$MIXTRAL_TEST_GROUPS"; then
+    if model_has_selected_group "$MIXTRAL_TEST_GROUPS" "mixtral"; then
         if [[ ! -f "$MIXTRAL_INPUT_BIN" ]]; then
             echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" >&2
             exit 1
@@ -526,7 +536,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
             for ((ti=0; ti<num_tests; ++ti)); do
                 test_id=$(jq -r ".test_groups[$gi].tests[$ti].id" "$CONFIG_FILE")
                 nproc_per_node="$(jq -r ".test_groups[$gi].infini_run_args.nproc_per_node // empty" "$CONFIG_FILE")"
-                if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS"; then
+                if tag_enabled_for_model "$group_tag" "$GPT2_TEST_GROUPS" && group_runs_model "$gi" "gpt2"; then
                     LORA_WEIGHTS_DIR="$GPT2_LORA_WEIGHTS_DIR"
                     gpt2_arg_str="$(args_string_for_test "$gi" "$ti" "gpt2" "$test_id")"
                     if [[ -n "$nproc_per_node" ]]; then
@@ -537,7 +547,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     run_and_log "$gpt2_cmd" "gpt2_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
-                if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS"; then
+                if tag_enabled_for_model "$group_tag" "$LLAMA3_TEST_GROUPS" && group_runs_model "$gi" "llama3"; then
                     LORA_WEIGHTS_DIR="$LLAMA3_LORA_WEIGHTS_DIR"
                     llama3_arg_str="$(args_string_for_test "$gi" "$ti" "llama3" "$test_id")"
                     if [[ -n "$nproc_per_node" ]]; then
@@ -548,7 +558,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     run_and_log "$llama3_cmd" "llama3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
-                if tag_enabled_for_model "$group_tag" "$QWEN3_TEST_GROUPS"; then
+                if tag_enabled_for_model "$group_tag" "$QWEN3_TEST_GROUPS" && group_runs_model "$gi" "qwen3"; then
                     qwen3_arg_str="$(args_string_for_test "$gi" "$ti" "qwen3" "$test_id")"
                     if [[ -n "$nproc_per_node" ]]; then
                         qwen3_cmd="$(infini_run_cmd_for_test "./qwen3" "$QWEN3_INPUT_BIN" "$QWEN3_LLMC_FILEPATH" "$qwen3_arg_str" "$nproc_per_node")"
@@ -558,7 +568,7 @@ for ((id=0; id<num_basic_compile_commands; ++id)); do
                     run_and_log "$qwen3_cmd" "qwen3_${test_id}${log_suffix}" "$profile_flag" "$group_tag"
                 fi
 
-                if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS"; then
+                if tag_enabled_for_model "$group_tag" "$MIXTRAL_TEST_GROUPS" && group_runs_model "$gi" "mixtral"; then
                     mixtral_arg_str="$(args_string_for_test "$gi" "$ti" "mixtral" "$test_id")"
                     if [[ -n "$nproc_per_node" ]]; then
                         mixtral_cmd="$(infini_run_cmd_for_test "./mixtral" "$MIXTRAL_INPUT_BIN" "$MIXTRAL_LLMC_FILEPATH" "$mixtral_arg_str" "$nproc_per_node")"
