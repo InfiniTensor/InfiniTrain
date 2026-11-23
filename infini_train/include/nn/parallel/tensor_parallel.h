@@ -26,6 +26,8 @@ std::shared_ptr<Tensor> GatherTensorParallelShard(
 
 std::vector<std::shared_ptr<Tensor>> GatherFromTPRegionFunc(
     const std::shared_ptr<Tensor> &input);
+std::vector<std::shared_ptr<Tensor>> ScatterToSPRegionFunc(
+    const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> ReduceScatterToSPRegionFunc(
     const std::shared_ptr<Tensor> &input);
 std::vector<std::shared_ptr<Tensor>> GatherFromSPRegionFunc(

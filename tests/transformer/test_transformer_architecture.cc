@@ -1,5 +1,8 @@
+#include <stddef.h>
 #include <stdint.h>
 
+#include <cmath>
+#include <initializer_list>
 #include <map>
 #include <memory>
 #include <optional>
@@ -13,16 +16,20 @@
 
 #include "infini_train/include/autograd/topk.h"
 #include "infini_train/include/datatype.h"
+#include "infini_train/include/device.h"
+#include "infini_train/include/nn/modules/linear.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/nn/modules/normalization.h"
 #include "infini_train/include/nn/modules/sparse.h"
 #include "infini_train/include/nn/modules/transformer/causal_self_attention.h"
+#include "infini_train/include/nn/modules/transformer/mla_self_attention.h"
 #include "infini_train/include/nn/modules/transformer/mlp.h"
 #include "infini_train/include/nn/modules/transformer/moe/moe_layer.h"
 #include "infini_train/include/nn/modules/transformer/moe/router.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/modules/transformer/transformer_config.h"
 #include "infini_train/include/nn/modules/transformer/utils.h"
+#include "infini_train/include/nn/parallel/tensor_parallel.h"
 #include "infini_train/include/shard_spec.h"
 #include "infini_train/include/tensor.h"
 
@@ -160,6 +167,109 @@ TEST_P(TransformerModuleTest, StandardAttention) {
                                         DataType::kFLOAT32, GetDevice());
   auto output = (*attn)({input});
   EXPECT_EQ(output[0]->Dims(), input->Dims());
+}
+
+TEST_P(TransformerModuleTest, MLAAttention) {
+  SKIP_CPU();
+  nn::TransformerConfig config;
+  config.n_embd = 64;
+  config.n_head = 4;
+  config.block_size = 16;
+  config.position_embedding_type = nn::PositionEmbeddingType::kLearnedAbsolute;
+  config.add_bias_linear = true;
+  config.multi_latent_attention = true;
+  config.q_lora_rank = 32;
+  config.kv_lora_rank = 32;
+  config.qk_nope_head_dim = 8;
+  config.qk_rope_head_dim = 8;
+  config.v_head_dim = 16;
+
+  auto attn = std::make_shared<nn::MLASelfAttention>(config);
+  attn->To(GetDevice());
+  EXPECT_FALSE(attn->Parameters().empty());
+  EXPECT_EQ(
+      attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName).type(),
+      nn::Linear::kType);
+  EXPECT_EQ(
+      attn->module(nn::MLASelfAttention::kLinearKVDownProjLayerName).type(),
+      nn::Linear::kType);
+
+  auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64},
+                                        DataType::kFLOAT32, GetDevice());
+  auto output = (*attn)({input});
+  EXPECT_EQ(output[0]->Dims(), input->Dims());
+
+  auto tp_down_config = config;
+  tp_down_config.q_down_proj_use_tp = true;
+  tp_down_config.kv_down_proj_use_tp = true;
+  auto tp_down_attn = std::make_shared<nn::MLASelfAttention>(tp_down_config);
+  tp_down_attn->To(GetDevice());
+  EXPECT_EQ(
+      tp_down_attn->module(nn::MLASelfAttention::kLinearQDownProjLayerName)
+          .type(),
+      nn::parallel::ColumnParallelLinear::kType);
+  EXPECT_EQ(
+      tp_down_attn->module(nn::MLASelfAttention::kLinearKVDownProjLayerName)
+          .type(),
+      nn::parallel::ColumnParallelLinear::kType);
+  output = (*tp_down_attn)({input});
+  EXPECT_EQ(output[0]->Dims(), input->Dims());
+
+  auto direct_q_config = config;
+  direct_q_config.q_lora_rank = std::nullopt;
+  auto direct_q_attn = std::make_shared<nn::MLASelfAttention>(direct_q_config);
+  direct_q_attn->To(GetDevice());
+  EXPECT_EQ(
+      direct_q_attn->module(nn::MLASelfAttention::kLinearQProjLayerName).type(),
+      nn::parallel::ColumnParallelLinear::kType);
+  output = (*direct_q_attn)({input});
+  EXPECT_EQ(output[0]->Dims(), input->Dims());
+}
+
+TEST_P(TransformerModuleTest, MLATransformerRoPE) {
+  SKIP_CPU();
+  for (bool rotary_interleaved : {false, true}) {
+    SCOPED_TRACE(rotary_interleaved);
+    nn::TransformerConfig config;
+    config.n_embd = 64;
+    config.n_head = 4;
+    config.block_size = 16;
+    config.position_embedding_type = nn::PositionEmbeddingType::kRoPE;
+    config.rotary_interleaved = rotary_interleaved;
+    config.multi_latent_attention = true;
+    config.q_lora_rank = 32;
+    config.kv_lora_rank = 32;
+    config.qk_nope_head_dim = 8;
+    config.qk_rope_head_dim = 8;
+    config.v_head_dim = 16;
+
+    auto chunk = std::make_shared<nn::TransformerChunk>(config, 0, 1);
+    chunk->To(GetDevice());
+    EXPECT_EQ(chunk->module(nn::TransformerChunk::kHLayerName)
+                  .module("0")
+                  .module(nn::TransformerLayer::kAttnLayerName)
+                  .type(),
+              nn::MLASelfAttention::kType);
+    auto input = std::make_shared<Tensor>(std::vector<int64_t>{2, 8, 64},
+                                          DataType::kFLOAT32, GetDevice());
+    input->Uniform();
+    input->RequiresGrad();
+    auto output = (*chunk)({input})[0];
+    EXPECT_EQ(output->Dims(), input->Dims());
+    auto output_cpu = output->To(Device());
+    const auto *values = static_cast<const float *>(output_cpu.DataPtr());
+    for (size_t i = 0; i < output_cpu.NumElements(); ++i) {
+      EXPECT_TRUE(std::isfinite(values[i]));
+    }
+    output->Sum(2)->Sum(1)->Sum(0)->Backward();
+    ASSERT_NE(input->grad(), nullptr);
+    EXPECT_EQ(input->grad()->Dims(), input->Dims());
+    auto grad_cpu = input->grad()->To(Device());
+    const auto *grads = static_cast<const float *>(grad_cpu.DataPtr());
+    for (size_t i = 0; i < grad_cpu.NumElements(); ++i) {
+      EXPECT_TRUE(std::isfinite(grads[i]));
+    }
+  }
 }
 
 TEST_P(TransformerModuleTest, GPT2TransformerLayer) {
