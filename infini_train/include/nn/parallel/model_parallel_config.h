@@ -28,6 +28,10 @@ struct ModelParallelConfig {
   int pipeline_model_parallel_size = 1;
   int virtual_pipeline_model_parallel_size = 1;
   // Dtype used by pipeline payloads on the communication wire.
+  // TODO: Extend --dtype from op-level autocast to a complete low-precision
+  // stack that uniformly controls parameter dtype, compute dtype, and PP wire
+  // dtype. Until then, PP-boundary tensors may remain FP32, so explicit BF16
+  // pipeline_dtype can introduce repeated FP32<->BF16 casts and precision loss.
   DataType pipeline_dtype = DataType::kFLOAT32;
   bool sequence_parallel = false;
   int expert_model_parallel_size = 1;
