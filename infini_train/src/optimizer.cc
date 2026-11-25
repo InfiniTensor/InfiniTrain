@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 
+#include <initializer_list>
 #include <ostream>
 #include <string>
 #include <unordered_map>
@@ -123,6 +124,7 @@ Adam::Adam(const std::vector<std::shared_ptr<Tensor>> &params,
                                              param->GetDevice()));
     v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(),
                                              param->GetDevice()));
+    steps_.push_back(0);
     m_.back()->Fill(0.0);
     v_.back()->Fill(0.0);
   }
@@ -140,6 +142,7 @@ Adam::Adam(const NamedParameterList &named_params, float learning_rate,
                                              param->GetDevice()));
     v_.emplace_back(std::make_shared<Tensor>(param->Dims(), param->Dtype(),
                                              param->GetDevice()));
+    steps_.push_back(0);
     m_.back()->Fill(0.0);
     v_.back()->Fill(0.0);
   }
@@ -163,7 +166,7 @@ void Adam::Step() {
     auto kernel =
         Dispatcher::Instance().GetKernel({device.type(), "AdamAccumulateGrad"});
     kernel.Call<void>(grad, param, m, v, learning_rate_, beta1_, beta2_, eps_,
-                      t_);
+                      ++steps_[i]);
   }
 }
 
@@ -190,6 +193,10 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict()
         parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
     state.emplace(std::string(kAdamFirstMomentPrefix) + suffix, m_[i]);
     state.emplace(std::string(kAdamSecondMomentPrefix) + suffix, v_[i]);
+    auto step = std::make_shared<Tensor>(std::vector<int64_t>{},
+                                         DataType::kINT64, Device());
+    *static_cast<int64_t *>(step->DataPtr()) = steps_[i];
+    state.emplace(std::string(kAdamParameterStepPrefix) + suffix, step);
   }
 
   auto t_tensor = std::make_shared<Tensor>(std::vector<int64_t>{},
@@ -202,22 +209,62 @@ std::unordered_map<std::string, std::shared_ptr<Tensor>> Adam::StateDict()
 void Adam::LoadStateDict(
     const std::unordered_map<std::string, std::shared_ptr<Tensor>>
         &state_dict) {
+  auto read_step = [&](const std::string &key) {
+    CHECK(state_dict.contains(key)) << "Missing optimizer state: " << key;
+    const auto &value = state_dict.at(key);
+    CHECK(value && value->Dtype() == DataType::kINT64 && value->Dims().empty())
+        << "Invalid Adam step tensor: " << key;
+    const Tensor cpu = value->To(Device());
+    core::GetDeviceGuardImpl(value->GetDevice().type())
+        ->SynchronizeDevice(value->GetDevice());
+    const int64_t count = *static_cast<const int64_t *>(cpu.DataPtr());
+    CHECK_GE(count, 0) << "Negative Adam step: " << key;
+    return count;
+  };
+  const int64_t global_step = read_step(std::string(kAdamStepKey));
+  bool has_parameter_steps = false;
+  for (const auto &[key, value] : state_dict) {
+    if (key.starts_with(kAdamParameterStepPrefix)) {
+      has_parameter_steps = true;
+      break;
+    }
+  }
+  std::vector<int64_t> loaded_steps;
+  loaded_steps.reserve(params_.size());
+  // Validate all keys/shapes before mutating optimizer state.
   for (size_t i = 0; i < m_.size(); ++i) {
     const auto suffix =
         parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
-    const auto m_key = std::string(kAdamFirstMomentPrefix) + suffix;
-    const auto v_key = std::string(kAdamSecondMomentPrefix) + suffix;
-    CHECK(state_dict.contains(m_key)) << "Missing optimizer state: " << m_key;
-    CHECK(state_dict.contains(v_key)) << "Missing optimizer state: " << v_key;
-    m_[i]->CopyFrom(state_dict.at(m_key));
-    v_[i]->CopyFrom(state_dict.at(v_key));
+    for (const auto &prefix : {"adam.m.", "adam.v."}) {
+      const std::string key = std::string(prefix) + suffix;
+      CHECK(state_dict.contains(key)) << "Missing optimizer state: " << key;
+      const auto &value = state_dict.at(key);
+      CHECK(value && value->Dims() == params_[i]->Dims() &&
+            value->Dtype() == params_[i]->Dtype())
+          << "Invalid Adam moment tensor: " << key;
+    }
+    loaded_steps.push_back(
+        has_parameter_steps
+            ? read_step(std::string(kAdamParameterStepPrefix) + suffix)
+            : global_step);
   }
-
-  const std::string step_key(kAdamStepKey);
-  CHECK(state_dict.contains(step_key))
-      << "Missing optimizer state: " << step_key;
-  const Tensor t_cpu = state_dict.at(step_key)->To(Device());
-  t_ = *static_cast<const int64_t *>(t_cpu.DataPtr());
+  if (!has_parameter_steps && !params_.empty()) {
+    LOG(WARNING) << "Loading legacy Adam state without per-parameter steps; "
+                    "using `adam.t` for every parameter. "
+                    "Past missing-gradient history cannot be reconstructed.";
+  }
+  for (size_t i = 0; i < m_.size(); ++i) {
+    const auto suffix =
+        parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
+    m_[i]->CopyFrom(state_dict.at("adam.m." + suffix));
+    v_[i]->CopyFrom(state_dict.at("adam.v." + suffix));
+    // Keep temporary checkpoint host storage alive until asynchronous copies
+    // finish.
+    const auto device = params_[i]->GetDevice();
+    core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
+  }
+  t_ = global_step;
+  steps_ = std::move(loaded_steps);
 }
 }  // namespace optimizers
 }  // namespace infini_train
