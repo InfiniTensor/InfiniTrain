@@ -6,7 +6,6 @@
 #include <iostream>
 #include <memory>
 #include <optional>
-#include <random>
 #include <string>
 #include <vector>
 
@@ -14,6 +13,8 @@
 
 #include "infini_train/include/datatype.h"
 #include "infini_train/include/device.h"
+// TODO: Reduce the Tensor header dependency on Generator.
+#include "infini_train/include/generator.h"
 #include "infini_train/include/scalar.h"
 
 namespace infini_train {
@@ -77,6 +78,8 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
 
   void *DataPtr();
   const void *DataPtr() const;
+
+  bool defined() const;
 
   size_t SizeInBytes() const;
 
@@ -165,7 +168,7 @@ class Tensor : public std::enable_shared_from_this<Tensor> {
   // distribution
   std::shared_ptr<Tensor> Uniform(
       float from = 0.0f, float to = 1.0f,
-      std::optional<std::mt19937> generator = std::nullopt);
+      std::optional<Generator> generator = std::nullopt);
 
   std::shared_ptr<Tensor> Matmul(const std::shared_ptr<Tensor> &other);
   std::shared_ptr<Tensor> Outer(const std::shared_ptr<Tensor> &other);

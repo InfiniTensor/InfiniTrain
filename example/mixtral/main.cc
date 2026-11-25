@@ -34,6 +34,7 @@
 #include "infini_train/include/core/runtime/device_guard.h"
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/transformer/transformer.h"
 #include "infini_train/include/nn/parallel/comm.h"
@@ -398,6 +399,7 @@ int main(int argc, char *argv[]) {
 
   nn::parallel::global::InitAllEnv(FLAGS_nthread_per_process,
                                    model_parallel_config);
+  infini_train::ManualSeed(42);
 
   LOG(INFO) << nn::parallel::global::ProcessGroupOverview(
       nn::parallel::global::GetDenseRankGenerator(),

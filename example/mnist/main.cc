@@ -15,6 +15,7 @@
 
 #include "infini_train/include/dataloader.h"
 #include "infini_train/include/device.h"
+#include "infini_train/include/generator.h"
 #include "infini_train/include/nn/modules/loss.h"
 #include "infini_train/include/nn/modules/module.h"
 #include "infini_train/include/optimizer.h"
@@ -51,6 +52,7 @@ int main(int argc, char *argv[]) {
                           "Model options: --help\nAll options: --helpfull");
   example::ParseModelFlags(&argc, &argv, "example/mnist/");
   google::InitGoogleLogging(argv[0]);
+  infini_train::ManualSeed(42);
 
   auto train_dataset = std::make_shared<MNISTDataset>(FLAGS_dataset, true);
   DataLoader train_dataloader(train_dataset, FLAGS_bs);
