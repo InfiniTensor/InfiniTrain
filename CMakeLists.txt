@@ -34,6 +34,8 @@ endif()
 # Third-party deps
 # ------------------------------------------------------------------------------
 
+find_package(Threads REQUIRED)
+
 # gflags
 add_subdirectory(third_party/gflags)
 include_directories(${gflags_SOURCE_DIR}/include)
@@ -150,6 +152,7 @@ target_link_libraries(infini_train
     glog
     gflags
     Eigen3::Eigen
+    Threads::Threads
 )
 if(USE_OMP)
   target_link_libraries(infini_train PUBLIC OpenMP::OpenMP_CXX)

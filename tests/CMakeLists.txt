@@ -14,6 +14,9 @@ add_subdirectory(module)
 # Backend extension contract tests
 add_subdirectory(backend)
 
+# Standalone executable link tests
+add_subdirectory(link)
+
 # DataLoader tests
 add_subdirectory(dataloader)
 
