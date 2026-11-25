@@ -78,8 +78,8 @@ std::vector<std::shared_ptr<Tensor>> AccumulateGrad::Backward(
     if (post_hook != nullptr) {
       (*post_hook)(tensor_->grad());
     }
-    tensor_->ResetAccumulator();
   }
+  tensor_->ResetAccumulator();
   return {};
 }
 }  // namespace infini_train::autograd
