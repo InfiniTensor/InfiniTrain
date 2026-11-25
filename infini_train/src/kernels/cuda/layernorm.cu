@@ -9,8 +9,83 @@
 
 #include "infini_train/src/core/runtime/cuda/cuda_dispatch.h"
 #include "infini_train/src/core/runtime/cuda/cuda_runtime_common.h"
+#include "infini_train/src/kernels/cuda/layernorm/kernel.cuh"
+#include "infini_train/src/kernels/cuda/layernorm/kernel.h"
 
 namespace infini_train::kernels::cuda {
+
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>,
+           std::shared_ptr<Tensor>>
+StableLayerNormForward32(const std::shared_ptr<Tensor> &x,
+                         const std::shared_ptr<Tensor> &w,
+                         const std::shared_ptr<Tensor> &b, float eps) {
+  CHECK(x->Dtype() == DataType::kFLOAT32 && w->Dtype() == x->Dtype() &&
+        b->Dtype() == x->Dtype());
+  CHECK_EQ(x->Dims().size(), 3);
+  const int tokens = x->Dims()[0] * x->Dims()[1], width = x->Dims()[2];
+  CHECK_GT(width, 0);
+  CHECK_LE(width, w->NumElements());
+  CHECK_LE(width, b->NumElements());
+  auto device = x->GetDevice();
+  auto y = std::make_shared<Tensor>(x->Dims(), DataType::kFLOAT32, device);
+  auto mean =
+      std::make_shared<Tensor>(std::vector<int64_t>{x->Dims()[0], x->Dims()[1]},
+                               DataType::kFLOAT32, device);
+  auto rstd =
+      std::make_shared<Tensor>(mean->Dims(), DataType::kFLOAT32, device);
+  auto stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                    core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                    ->cuda_stream();
+  StableLNForward32<256><<<tokens, 256, 0, stream>>>(
+      static_cast<const float *>(x->DataPtr()),
+      static_cast<const float *>(w->DataPtr()),
+      static_cast<const float *>(b->DataPtr()), width, eps,
+      static_cast<float *>(mean->DataPtr()),
+      static_cast<float *>(rstd->DataPtr()),
+      static_cast<float *>(y->DataPtr()));
+  return {y, mean, rstd};
+}
+
+std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>,
+           std::shared_ptr<Tensor>>
+StableLayerNormBackward32(const std::shared_ptr<Tensor> &x,
+                          const std::shared_ptr<Tensor> &w,
+                          const std::shared_ptr<Tensor> &b,
+                          const std::shared_ptr<Tensor> &rstd,
+                          const std::shared_ptr<Tensor> &dy) {
+  CHECK(x->Dtype() == DataType::kFLOAT32 && w->Dtype() == x->Dtype() &&
+        b->Dtype() == x->Dtype() && dy->Dtype() == x->Dtype());
+  CHECK_EQ(x->Dims().size(), 3);
+  const int tokens = x->Dims()[0] * x->Dims()[1], width = x->Dims()[2];
+  CHECK_GT(width, 0);
+  CHECK_LE(width, w->NumElements());
+  CHECK_LE(width, b->NumElements());
+  auto device = x->GetDevice();
+  auto dx = std::make_shared<Tensor>(x->Dims(), DataType::kFLOAT32, device);
+  auto dw = std::make_shared<Tensor>(w->Dims(), DataType::kFLOAT32, device);
+  auto db = std::make_shared<Tensor>(b->Dims(), DataType::kFLOAT32, device);
+  auto normalized =
+      std::make_shared<Tensor>(x->Dims(), DataType::kFLOAT32, device);
+  dw->Fill(0);
+  db->Fill(0);
+  auto stream = dynamic_cast<infini_train::core::cuda::CudaStream *>(
+                    core::GetDeviceGuardImpl(device.type())->GetStream(device))
+                    ->cuda_stream();
+  StableLNInputGrad32<256><<<tokens, 256, 0, stream>>>(
+      static_cast<const float *>(x->DataPtr()),
+      static_cast<const float *>(dy->DataPtr()),
+      static_cast<const float *>(w->DataPtr()),
+      static_cast<const float *>(rstd->DataPtr()), width,
+      static_cast<float *>(normalized->DataPtr()),
+      static_cast<float *>(dx->DataPtr()));
+  StableLNParameterGrad32<256><<<width, 256, 0, stream>>>(
+      static_cast<const float *>(normalized->DataPtr()),
+      static_cast<const float *>(dy->DataPtr()), tokens, width,
+      static_cast<float *>(dw->DataPtr()), static_cast<float *>(db->DataPtr()));
+  // Keep the temporary workspace alive until both kernels have completed.
+  core::GetDeviceGuardImpl(device.type())->SynchronizeDevice(device);
+  return {dx, dw, db};
+}
 
 template <int BLOCK_SIZE, typename T>
 __global__ void LayerNormForwardKernel(const T *input, const T *weight,
@@ -66,6 +141,10 @@ std::tuple<std::shared_ptr<Tensor>, std::shared_ptr<Tensor>,
 LayerNormForward(const std::shared_ptr<Tensor> &input,
                  const std::shared_ptr<Tensor> &weight,
                  const std::shared_ptr<Tensor> &bias, const float eps) {
+  if (input->Dtype() == DataType::kFLOAT32) {
+    return StableLayerNormForward32(input, weight, bias, eps);
+  }
+
   CHECK_EQ(input->Dims().size(), 3);
   CHECK_LE(input->Dims()[2], weight->Dims()[0]);
   CHECK_LE(input->Dims()[2], bias->Dims()[0]);
@@ -213,6 +292,10 @@ LayerNormBackward(const std::shared_ptr<Tensor> &input,
                   const std::shared_ptr<Tensor> &mean,
                   const std::shared_ptr<Tensor> &rstd,
                   const std::shared_ptr<Tensor> &grad_output) {
+  if (input->Dtype() == DataType::kFLOAT32) {
+    return StableLayerNormBackward32(input, weight, bias, rstd, grad_output);
+  }
+
   CHECK_EQ(input->Dims().size(), 3);
   CHECK_LE(input->Dims()[2], weight->Dims()[0]);
   CHECK_LE(input->Dims()[2], bias->Dims()[0]);
