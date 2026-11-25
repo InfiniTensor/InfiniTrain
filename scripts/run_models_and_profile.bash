@@ -79,9 +79,17 @@ else
     REDACT_SED_BUFFER=()
 fi
 
+# Redact the current $HOME prefix exactly, then fall back to generic account
+# directories for other users. Usernames are limited to POSIX-safe characters
+# so delimiters such as ':' or ',' do not get consumed as part of the name.
+REDACT_HOME_RULE=""
+if [[ -n "$HOME" && "$HOME" != "/" ]]; then
+    REDACT_HOME_RULE="s@$(printf '%s' "$HOME" | sed 's/[][\\.*^$(){}?+|@]/\\&/g')@<home>@g; "
+fi
+
 redact_log_paths() {
     sed -E "${REDACT_SED_BUFFER[@]}" \
-        "s@/(home|Users)/[^/[:space:]\"']+@<home>@g; s@~/@<home>/@g; s@/root([^[:alnum:]_-])@<home>\\1@g; s@/root\$@<home>@g" "$@"
+        "${REDACT_HOME_RULE}s@/(home|Users)/[[:alnum:]_.-]+@<home>@g; s@~/@<home>/@g; s@/root([^[:alnum:]_-])@<home>\\1@g; s@/root\$@<home>@g" "$@"
 }
 
 BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
@@ -489,17 +497,19 @@ run_and_log() {
         pushd "$BUILD_DIR" > /dev/null
 
         # Filter output before writing it, including logs from interrupted commands.
-        # Keep eval in this shell and wait for the filter to flush before reading logs.
-        local log_output_fd log_filter_pid
-        exec {log_output_fd}> >(redact_log_paths >> "$log_path")
-        log_filter_pid=$!
-        if eval "$cmd" >&"$log_output_fd" 2>&1; then
-            exit_code=0
-        else
-            exit_code=$?
+        # A pipeline is compatible with Bash 3.2 (macOS) and waits for the filter
+        # to flush before the log is read again. PIPESTATUS preserves the test
+        # command's exit code separately from the redaction filter's status.
+        local -a pipe_status
+        set +e
+        eval "$cmd" 2>&1 | redact_log_paths >> "$log_path"
+        pipe_status=("${PIPESTATUS[@]}")
+        set -e
+        exit_code="${pipe_status[0]}"
+        if [[ "${pipe_status[1]}" -ne 0 ]]; then
+            echo -e "\033[1;31m[ERROR] Log redaction filter failed with status ${pipe_status[1]}\033[0m" | redact_log_paths >&2
+            exit_code=1
         fi
-        exec {log_output_fd}>&-
-        wait "$log_filter_pid"
 
         popd > /dev/null
         echo "[EXIT_CODE] $exit_code" >> "$log_path"
