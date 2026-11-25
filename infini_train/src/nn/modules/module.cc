@@ -405,43 +405,69 @@ std::vector<std::shared_ptr<Tensor>> Module::operator()(
   return output_tensors;
 }
 
-void Module::To(Device device) {
-  if (device == device_) {
+void Module::ConvertTensors(const std::function<std::shared_ptr<Tensor>(
+                                const std::shared_ptr<Tensor> &)> &convert,
+                            TensorConversionMemo &converted,
+                            std::unordered_set<Module *> &visited,
+                            const Device *device) {
+  if (!visited.insert(this).second) {
     return;
   }
-
-  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
-  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-  for (auto &[name, param] : parameters_) {
-    new_parameters.emplace(name, std::make_shared<Tensor>(param->To(device)));
+  // The memo spans the entire module graph, not just one child. Keeping the
+  // original `shared_ptr` in the value also keeps source tensors alive during
+  // conversion and prevents allocator address reuse from corrupting the memo.
+  auto convert_once = [&](std::shared_ptr<Tensor> &tensor) {
+    if (!tensor) {
+      return;
+    }
+    auto it = converted.find(tensor.get());
+    if (it == converted.end()) {
+      it = converted
+               .emplace(tensor.get(), std::make_pair(tensor, convert(tensor)))
+               .first;
+    }
+    tensor = it->second.second;
+  };
+  for (auto &[_, parameter] : parameters_) {
+    convert_once(parameter);
   }
-  for (auto &[name, buffer] : buffers_) {
-    new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(device)));
+  for (auto &[_, buffer] : buffers_) {
+    convert_once(buffer);
   }
-  parameters_ = std::move(new_parameters);
-  buffers_ = std::move(new_buffers);
-  device_ = device;
-
-  for (auto &[_, module] : modules_) {
-    module->To(device);
+  if (device) {
+    device_ = *device;
+  }
+  for (auto &[_, child] : modules_) {
+    if (child) {
+      child->ConvertTensors(convert, converted, visited, device);
+    }
   }
 }
 
-void Module::To(DataType dtype) {
-  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_parameters;
-  std::unordered_map<std::string, std::shared_ptr<Tensor>> new_buffers;
-  for (auto &[name, param] : parameters_) {
-    new_parameters.emplace(name, std::make_shared<Tensor>(param->To(dtype)));
-  }
-  for (auto &[name, buffer] : buffers_) {
-    new_buffers.emplace(name, std::make_shared<Tensor>(buffer->To(dtype)));
-  }
-  parameters_ = std::move(new_parameters);
-  buffers_ = std::move(new_buffers);
+void Module::To(Device device) {
+  TensorConversionMemo converted;
+  std::unordered_set<Module *> visited;
+  // Do not return based only on this module's `device_`: children can have
+  // been moved independently, and registered tensors are authoritative.
+  ConvertTensors(
+      [device](const std::shared_ptr<Tensor> &tensor) {
+        return tensor->GetDevice() == device
+                   ? tensor
+                   : std::make_shared<Tensor>(tensor->To(device));
+      },
+      converted, visited, &device);
+}
 
-  for (auto &[_, layer] : modules_) {
-    layer->To(dtype);
-  }
+void Module::To(DataType dtype) {
+  TensorConversionMemo converted;
+  std::unordered_set<Module *> visited;
+  ConvertTensors(
+      [dtype](const std::shared_ptr<Tensor> &tensor) {
+        return tensor->Dtype() == dtype
+                   ? tensor
+                   : std::make_shared<Tensor>(tensor->To(dtype));
+      },
+      converted, visited, nullptr);
 }
 
 void Module::Apply(std::function<void(Module *)> fn) {
