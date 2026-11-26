@@ -66,10 +66,6 @@ ProcessGroup::ProcessGroup(Device::DeviceType backend,
 }
 
 ProcessGroup::~ProcessGroup() {
-  if (is_main_process_) {
-    core::CleanupUniqueIdFile(name_);
-  }
-
   // NOTE(zbl): The destruction could happen after GPU runtime is destroyed,
   //            so do not explicitly destroy streams or comms here
 }
@@ -107,10 +103,9 @@ void ProcessGroup::InitMultiProcess(const std::vector<int> &ranks) {
 
   int min_rank = std::ranges::min(ranks);
   if (min_rank < upper_rank && min_rank >= lower_rank) {
-    is_main_process_ = true;
-    core::WriteUniqueIdFile(*unique_id, name_);
+    core::WriteUniqueId(*unique_id, name_);
   } else {
-    core::ReadUniqueIdFile(unique_id.get(), name_);
+    core::ReadUniqueId(unique_id.get(), name_);
   }
 
   const auto local_rank_count =
