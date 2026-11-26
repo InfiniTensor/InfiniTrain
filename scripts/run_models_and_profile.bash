@@ -71,6 +71,27 @@ read_var() {
     jq -r --arg k "$key" '.variables[$k] // empty' "$CONFIG_FILE"
 }
 
+# GNU sed supports -u; BSD/macOS sed does not. Buffering is acceptable there
+# because callers wait for the filter process to exit before reading logs.
+if sed --help 2>&1 | grep -q -- --unbuffered; then
+    REDACT_SED_BUFFER=(-u)
+else
+    REDACT_SED_BUFFER=()
+fi
+
+# Redact the current $HOME prefix exactly, then fall back to generic account
+# directories for other users. Usernames are limited to POSIX-safe characters
+# so delimiters such as ':' or ',' do not get consumed as part of the name.
+REDACT_HOME_RULE=""
+if [[ -n "$HOME" && "$HOME" != "/" ]]; then
+    REDACT_HOME_RULE="s@$(printf '%s' "$HOME" | sed 's/[][\\.*^$(){}?+|@]/\\&/g')@<home>@g; "
+fi
+
+redact_log_paths() {
+    sed -E "${REDACT_SED_BUFFER[@]}" \
+        "${REDACT_HOME_RULE}s@/(home|Users)/[[:alnum:]_.-]+@<home>@g; s@~/@<home>/@g; s@/root([^[:alnum:]_-])@<home>\\1@g; s@/root\$@<home>@g" "$@"
+}
+
 BUILD_DIR="$(read_var BUILD_DIR)";              : "${BUILD_DIR:=../build}"
 LOG_DIR="$(read_var LOG_DIR)";                  : "${LOG_DIR:=logs}"
 PROFILE_LOG_DIR="$(read_var PROFILE_LOG_DIR)";  : "${PROFILE_LOG_DIR:=./profile_logs}"
@@ -145,13 +166,13 @@ RUN_METADATA_FILE="$(realpath "$RUN_METADATA_FILE")"
     echo "[GIT_BRANCH] $GIT_BRANCH"
     echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
     echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
-    echo "[CONFIG_FILE] $CONFIG_FILE"
-    echo "[LOG_DIR] $(realpath "$LOG_DIR")"
-    echo "[PROFILE_LOG_DIR] $(realpath "$PROFILE_LOG_DIR")"
+    echo "[CONFIG_FILE] $(basename -- "$CONFIG_FILE")"
+    echo "[LOG_DIR] logs"
+    echo "[PROFILE_LOG_DIR] profile_logs"
 } > "$RUN_METADATA_FILE"
-echo -e "\033[1;33mRun metadata:\033[0m $RUN_METADATA_FILE"
-echo -e "\033[1;33mRun log dir:\033[0m $(realpath "$LOG_DIR")"
-echo -e "\033[1;33mRun profile log dir:\033[0m $(realpath "$PROFILE_LOG_DIR")"
+echo -e "\033[1;33mRun metadata:\033[0m $RUN_METADATA_FILE" | redact_log_paths
+echo -e "\033[1;33mRun log dir:\033[0m $LOG_DIR" | redact_log_paths
+echo -e "\033[1;33mRun profile log dir:\033[0m $PROFILE_LOG_DIR" | redact_log_paths
 
 normalize_tag() {
     local raw="$1"
@@ -201,7 +222,7 @@ fi
 
 # Clean the build directory
 clean_build_dir() {
-    echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m"
+    echo -e "\033[1;31m[CLEAN] Removing all contents in: ${BUILD_DIR}\033[0m" | redact_log_paths
     mkdir -p "$BUILD_DIR"
     rm -rf "${BUILD_DIR:?}/"*
 }
@@ -209,7 +230,7 @@ clean_build_dir() {
 # Clean checkpoint directories (called once at start of script)
 clean_checkpoints() {
     if [[ -d "$CKPT_ROOT_DIR" ]]; then
-        echo -e "\033[1;31m[CLEAN] Removing: ${CKPT_ROOT_DIR}\033[0m"
+        echo -e "\033[1;31m[CLEAN] Removing: ${CKPT_ROOT_DIR}\033[0m" | redact_log_paths
         rm -rf "${CKPT_ROOT_DIR:?}"
     fi
 }
@@ -428,23 +449,22 @@ run_and_log() {
     local tag_log_dir="${LOG_DIR}/${tag}"
     mkdir -p "$tag_log_dir"
     local log_path="$(realpath "${tag_log_dir}/${log_name}.log")"
-
     echo -e "\033[1;32m============================================================\033[0m"
     echo -e "\033[1;36m[$timestamp] [Running] ${log_name}\033[0m"
     
     # Print the command being executed
-    echo -e "\033[1;33mCommand:\033[0m $cmd"
+    echo -e "\033[1;33mCommand:\033[0m $cmd" | redact_log_paths
 
     # Print the most recent CMake command
     if [[ -n "$LAST_CMAKE_CMD" ]]; then
-        echo -e "\033[1;34mLast CMake Command:\033[0m $LAST_CMAKE_CMD"
+        echo -e "\033[1;34mLast CMake Command:\033[0m $LAST_CMAKE_CMD" | redact_log_paths
     fi
 
-    echo -e "\033[1;33mLog file:\033[0m $log_path"
+    echo -e "\033[1;33mLog file:\033[0m $log_path" | redact_log_paths
 
     # Notify if profiling mode is enabled
     if [[ "$is_profile" == "yes" ]]; then
-        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${PROFILE_LOG_DIR}\033[0m"
+        echo -e "\033[1;35m[PROFILE MODE ON] Profiling logs will be saved to: ${PROFILE_LOG_DIR}\033[0m" | redact_log_paths
     fi
 
     echo -e "\033[1;32m============================================================\033[0m"
@@ -465,22 +485,30 @@ run_and_log() {
         # Overwrite the previous attempt while preserving metadata for the final log.
         {
             if [[ -n "$LAST_CMAKE_CMD" ]]; then
-                echo "[LAST_CMAKE] $LAST_CMAKE_CMD"
+                echo "[LAST_CMAKE] $LAST_CMAKE_CMD" | redact_log_paths
             fi
-            echo "[RUN_METADATA] $RUN_METADATA_FILE"
+            echo "[RUN_METADATA] $RUN_METADATA_FILE" | redact_log_paths
             echo "[RUN_STARTED_AT] $RUN_STARTED_AT"
             echo "[GIT_BRANCH] $GIT_BRANCH"
             echo "[GIT_COMMIT] $GIT_COMMIT_FULL"
             echo "[GIT_COMMIT_SHORT] $GIT_COMMIT_SHORT"
-            echo "[COMMAND] $expanded_cmd"
+            echo "[COMMAND] $expanded_cmd" | redact_log_paths
         } > "$log_path"
         pushd "$BUILD_DIR" > /dev/null
 
-        # Append this attempt's stdout and stderr after the metadata.
-        if eval "$cmd" >> "$log_path" 2>&1; then
-            exit_code=0
-        else
-            exit_code=$?
+        # Filter output before writing it, including logs from interrupted commands.
+        # A pipeline is compatible with Bash 3.2 (macOS) and waits for the filter
+        # to flush before the log is read again. PIPESTATUS preserves the test
+        # command's exit code separately from the redaction filter's status.
+        local -a pipe_status
+        set +e
+        eval "$cmd" 2>&1 | redact_log_paths >> "$log_path"
+        pipe_status=("${PIPESTATUS[@]}")
+        set -e
+        exit_code="${pipe_status[0]}"
+        if [[ "${pipe_status[1]}" -ne 0 ]]; then
+            echo -e "\033[1;31m[ERROR] Log redaction filter failed with status ${pipe_status[1]}\033[0m" | redact_log_paths >&2
+            exit_code=1
         fi
 
         popd > /dev/null
@@ -498,8 +526,8 @@ run_and_log() {
         fi
 
         echo -e "\033[1;31m============================================================\033[0m"
-        echo -e "\033[1;31m[ERROR] Attempt ${attempt}/${max_attempts} failed (exit code ${exit_code}): ${cmd}\033[0m"
-        echo -e "\033[1;31m[ERROR] See log file for details: ${log_path}\033[0m"
+        echo -e "\033[1;31m[ERROR] Attempt ${attempt}/${max_attempts} failed (exit code ${exit_code}): ${cmd}\033[0m" | redact_log_paths
+        echo -e "\033[1;31m[ERROR] See log file for details: ${log_path}\033[0m" | redact_log_paths
         echo -e "\033[1;31m============================================================\033[0m"
         echo ""
         echo "[ERROR] Last 20 lines of log:"
@@ -553,7 +581,7 @@ move_profile_logs() {
             local base_name
             base_name=$(basename "$report_file")
             mv "$report_file" "${tag_profile_dir}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}" | redact_log_paths
         fi
     done
 
@@ -563,7 +591,7 @@ move_profile_logs() {
             local base_name
             base_name=$(basename "$record_file")
             mv "$record_file" "${tag_profile_dir}/${prefix}_${base_name}"
-            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}"
+            echo "Moved $base_name to ${tag_profile_dir}/${prefix}_${base_name}" | redact_log_paths
         fi
     done
 }
@@ -637,11 +665,11 @@ model_has_selected_group() {
 check_model_inputs() {
     if model_has_selected_group "$MIXTRAL_TEST_GROUPS"; then
         if [[ ! -f "$MIXTRAL_INPUT_BIN" ]]; then
-            echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" >&2
+            echo "Error: missing MIXTRAL_INPUT_BIN: $MIXTRAL_INPUT_BIN" | redact_log_paths >&2
             exit 1
         fi
         if [[ ! -f "$MIXTRAL_LLMC_FILEPATH" ]]; then
-            echo "Error: missing MIXTRAL_LLMC_FILEPATH: $MIXTRAL_LLMC_FILEPATH" >&2
+            echo "Error: missing MIXTRAL_LLMC_FILEPATH: $MIXTRAL_LLMC_FILEPATH" | redact_log_paths >&2
             exit 1
         fi
     fi
@@ -786,35 +814,35 @@ if [[ -n "$COMPARE_LOG_DIR" ]]; then
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 
     echo -e "\n\033[1;36m============================================================\033[0m"
-    echo -e "\033[1;36m[Comparison] Comparing logs with: ${COMPARE_LOG_DIR}\033[0m"
+    echo -e "\033[1;36m[Comparison] Comparing logs with: ${COMPARE_LOG_DIR}\033[0m" | redact_log_paths
     echo -e "\033[1;36m============================================================\033[0m"
 
     # Run compare_loss.py
     echo -e "\n\033[1;33m[Running] compare_loss.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+    python3 "${SCRIPT_DIR}/compare_loss.py" "$COMPARE_LOG_DIR" "$LOG_DIR" 2>&1 | redact_log_paths || true
 
     # Run compare_tps.py
     echo -e "\n\033[1;33m[Running] compare_tps.py\033[0m"
-    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" || true
+    python3 "${SCRIPT_DIR}/compare_tps.py" "$COMPARE_LOG_DIR" "$LOG_DIR" 2>&1 | redact_log_paths || true
 
     echo -e "\n\033[1;32mComparison completed.\033[0m"
 else
     echo -e "\n\033[1;33m============================================================\033[0m"
     echo -e "\033[1;33m[WARNING] COMPARE_LOG_DIR is not set. Skipping comparison.\033[0m"
-    echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in ${CONFIG_FILE}\033[0m"
+    echo -e "\033[1;33m         To enable comparison, set 'variables.COMPARE_LOG_DIR' in $(basename -- "$CONFIG_FILE")\033[0m"
     echo -e "\033[1;33m         or export COMPARE_LOG_DIR=/path/to/baseline_logs before running.\033[0m"
     echo -e "\033[1;33m============================================================\033[0m"
 
     echo -e "\n\033[1;33mRun comparison manually:\033[0m"
-    echo "python3 compare_loss.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
-    echo "python3 compare_tps.py \"/path/to/baseline_logs\" \"$(realpath "$LOG_DIR")\""
+    echo "python3 compare_loss.py \"/path/to/baseline_logs\" \"$LOG_DIR\"" | redact_log_paths
+    echo "python3 compare_tps.py \"/path/to/baseline_logs\" \"$LOG_DIR\"" | redact_log_paths
 fi
 
 echo -e "\n\033[1;36m[END OF TEST] Cleaning build directory after all tests\033[0m"
 clean_build_dir
 
 echo -e "\n\033[1;33mNext step:\033[0m"
-echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\""
+echo "python3 write_to_feishu_sheet.py token.json --log-dir \"$(realpath "$RUN_OUTPUT_DIR")\"" | redact_log_paths
 
 print_test_summary
 if (( ${#FAILED_TEST_CASES[@]} > 0 )); then
