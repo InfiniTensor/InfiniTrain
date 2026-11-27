@@ -1,5 +1,7 @@
 #pragma once
 
+#include <stdint.h>
+
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -52,5 +54,19 @@ class ModuleList : public CloneableModule<ModuleList> {
 
  private:
   std::vector<std::shared_ptr<Module>> module_list_;
+};
+
+class Flatten : public CloneableModule<Flatten> {
+ public:
+  static constexpr char kType[] = "Flatten";
+
+  explicit Flatten(int64_t start_dim = 1, int64_t end_dim = -1);
+
+  std::vector<std::shared_ptr<Tensor>> Forward(
+      const std::vector<std::shared_ptr<Tensor>> &input_tensors) override;
+
+ private:
+  int64_t start_dim_ = 1;
+  int64_t end_dim_ = -1;
 };
 }  // namespace infini_train::nn

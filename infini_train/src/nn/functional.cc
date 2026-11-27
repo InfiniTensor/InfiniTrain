@@ -103,4 +103,12 @@ std::shared_ptr<Tensor> Softmax(const std::shared_ptr<Tensor> &input,
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input) {
   return std::make_shared<autograd::Sigmoid>()->Apply({input})[0];
 }
+
+std::shared_ptr<Tensor> ReLU(const std::shared_ptr<Tensor> &input) {
+  return std::make_shared<autograd::ReLU>()->Apply({input})[0];
+}
+
+std::shared_ptr<Tensor> ReLU6(const std::shared_ptr<Tensor> &input) {
+  return std::make_shared<autograd::ReLU6>()->Apply({input})[0];
+}
 }  // namespace infini_train::nn::function

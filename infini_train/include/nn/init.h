@@ -48,6 +48,12 @@ std::shared_ptr<Tensor> KaimingUniform(
     NonLinearityType non_linearity = NonLinearityType::kLeakyReLU,
     std::optional<std::mt19937> generator = std::nullopt);
 
+std::shared_ptr<Tensor> KaimingNormal(
+    const std::shared_ptr<Tensor> &tensor, float a = 0.0f,
+    KaimingMode mode = KaimingMode::kFanIn,
+    NonLinearityType non_linearity = NonLinearityType::kLeakyReLU,
+    std::optional<std::mt19937> generator = std::nullopt);
+
 std::shared_ptr<Tensor> Uniform(
     const std::shared_ptr<Tensor> &tensor, float a = 0.0f, float b = 1.0f,
     std::optional<std::mt19937> generator = std::nullopt);

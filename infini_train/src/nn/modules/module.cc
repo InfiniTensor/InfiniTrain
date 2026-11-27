@@ -137,6 +137,33 @@ std::vector<std::shared_ptr<Tensor>> Module::Buffers() const {
   return buffers;
 }
 
+bool Module::has_buffer(const std::string &name) const {
+  return buffers_.find(name) != buffers_.end();
+}
+
+std::shared_ptr<Tensor> *Module::mutable_buffer(const std::string &name) {
+  CHECK(buffers_.find(name) != buffers_.end());
+  return &buffers_.at(name);
+}
+
+const std::shared_ptr<Tensor> &Module::buffer(const std::string &name) const {
+  CHECK(buffers_.find(name) != buffers_.end());
+  return buffers_.at(name);
+}
+
+void Module::Train(bool mode) {
+  training_ = mode;
+  for (auto &[_, module] : modules_) {
+    if (module) {
+      module->Train(mode);
+    }
+  }
+}
+
+void Module::Eval() { Train(false); }
+
+bool Module::is_training() const { return training_; }
+
 std::vector<std::shared_ptr<Module>> Module::modules() {
   std::vector<std::shared_ptr<Module>> modules;
   auto named_modules = NamedModules();

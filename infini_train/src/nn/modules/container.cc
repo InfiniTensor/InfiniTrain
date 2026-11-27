@@ -8,6 +8,8 @@
 
 #include "glog/logging.h"
 
+#include "infini_train/include/tensor.h"
+
 namespace infini_train::nn {
 Sequential::Sequential(std::vector<std::shared_ptr<Module>> &&layers)
     : CloneableModule(kType) {
@@ -69,6 +71,15 @@ std::vector<std::shared_ptr<Module>>::const_iterator ModuleList::end() const {
 
 std::shared_ptr<Module> &ModuleList::operator[](std::size_t idx) {
   return module_list_.at(idx);
+}
+
+Flatten::Flatten(int64_t start_dim, int64_t end_dim)
+    : CloneableModule(kType), start_dim_(start_dim), end_dim_(end_dim) {}
+
+std::vector<std::shared_ptr<Tensor>> Flatten::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  CHECK_EQ(input_tensors.size(), 1);
+  return {input_tensors[0]->Flatten(start_dim_, end_dim_)};
 }
 
 }  // namespace infini_train::nn

@@ -151,6 +151,8 @@ std::shared_ptr<Tensor> Max(const std::shared_ptr<Tensor> &input, int64_t dim,
 // Returns:
 //   A tensor containing sigmoid applied element-wise to the input.
 std::shared_ptr<Tensor> Sigmoid(const std::shared_ptr<Tensor> &input);
+std::shared_ptr<Tensor> ReLU(const std::shared_ptr<Tensor> &input);
+std::shared_ptr<Tensor> ReLU6(const std::shared_ptr<Tensor> &input);
 
 // Applies the softmax function along the specified dimension.
 //

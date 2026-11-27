@@ -34,7 +34,8 @@ ShardedStateDict BuildOptimizerShardedStateDict(
 
   ShardedStateDict result;
   for (const auto &[local_key, tensor] : optimizer_state) {
-    if (local_key == optimizers::kAdamStepKey) {
+    if (local_key == optimizers::kAdamStepKey ||
+        local_key == optimizers::kSGDStepKey) {
       auto info = MakeShardedTensor(local_key, tensor->Dtype(), tensor->Dims());
       info.local_key = local_key;
       result.tensors.emplace(local_key, std::move(info));
@@ -46,6 +47,8 @@ ShardedStateDict BuildOptimizerShardedStateDict(
       state_prefix = optimizers::kAdamFirstMomentPrefix;
     } else if (local_key.starts_with(optimizers::kAdamSecondMomentPrefix)) {
       state_prefix = optimizers::kAdamSecondMomentPrefix;
+    } else if (local_key.starts_with(optimizers::kSGDMomentumBufferPrefix)) {
+      state_prefix = optimizers::kSGDMomentumBufferPrefix;
     } else {
       CHECK(false) << "Unsupported optimizer state key: " << local_key;
     }
@@ -82,7 +85,8 @@ ShardedStateDict BuildOptimizerShardedStateDict(
 std::vector<WriteItem> SavePlanner::Plan(const ShardedStateDict &sd, int rank) {
   std::vector<WriteItem> items;
   for (auto &[key, info] : sd.tensors) {
-    bool is_optimizer = key.starts_with(optimizers::kAdamOptimizerPrefix);
+    bool is_optimizer = key.starts_with(optimizers::kAdamOptimizerPrefix) ||
+                        key.starts_with(optimizers::kSGDOptimizerPrefix);
     WriteItem item;
     item.key = key;
     item.filename =

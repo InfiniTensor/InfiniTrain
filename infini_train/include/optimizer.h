@@ -66,15 +66,39 @@ inline constexpr std::string_view kAdamFirstMomentPrefix = "adam.m.";
 inline constexpr std::string_view kAdamSecondMomentPrefix = "adam.v.";
 inline constexpr std::string_view kAdamStepKey = "adam.t";
 
+inline constexpr std::string_view kSGDOptimizerPrefix = "sgd.";
+inline constexpr std::string_view kSGDMomentumBufferPrefix = "sgd.buf.";
+inline constexpr std::string_view kSGDStepKey = "sgd.step";
+
 class SGD : public Optimizer {
  public:
-  SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate);
-  SGD(const NamedParameterList &named_params, float learning_rate);
+  SGD(const std::vector<std::shared_ptr<Tensor>> &params, float learning_rate,
+      float momentum = 0.0f, float weight_decay = 0.0f);
+  SGD(const NamedParameterList &named_params, float learning_rate,
+      float momentum = 0.0f, float weight_decay = 0.0f);
 
   void Step() override;
 
-  static OptimizerCreator Create(float learning_rate);
-  static OptimizerCreatorNamed CreateNamed(float learning_rate);
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> StateDict()
+      const override;
+
+  void LoadStateDict(
+      const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+          &state_dict) override;
+
+  static OptimizerCreator Create(float learning_rate, float momentum = 0.0f,
+                                 float weight_decay = 0.0f);
+  static OptimizerCreatorNamed CreateNamed(float learning_rate,
+                                           float momentum = 0.0f,
+                                           float weight_decay = 0.0f);
+
+ private:
+  void InitMomentumBuffers();
+
+  float momentum_ = 0.0f;
+  float weight_decay_ = 0.0f;
+  int64_t step_ = 0;
+  std::vector<std::shared_ptr<Tensor>> momentum_buffers_;
 };
 
 class Adam : public Optimizer {

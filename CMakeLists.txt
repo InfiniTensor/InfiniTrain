@@ -1,6 +1,7 @@
 cmake_minimum_required(VERSION 3.28)
 
 option(USE_CUDA "Support NVIDIA CUDA" OFF)
+option(USE_CUDNN "Use cuDNN for accelerated Conv2d on CUDA" OFF)
 option(PROFILE_MODE "ENABLE PROFILE MODE" OFF)
 option(USE_OMP "Use OpenMP as backend for Eigen" ON)
 option(USE_NCCL "Build project for distributed running on CUDA using NCCL" ON)
@@ -115,7 +116,11 @@ if(USE_CUDA)
   file(GLOB_RECURSE CUDA_KERNELS ${PROJECT_SOURCE_DIR}/infini_train/src/*.cu)
 
   add_library(infini_train_cuda_kernels STATIC ${CUDA_KERNELS})
-  set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  if(NOT DEFINED CMAKE_CUDA_ARCHITECTURES OR CMAKE_CUDA_ARCHITECTURES STREQUAL "")
+    set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "75;80;90")
+  else()
+    set_target_properties(infini_train_cuda_kernels PROPERTIES CUDA_ARCHITECTURES "${CMAKE_CUDA_ARCHITECTURES}")
+  endif()
 
   target_link_libraries(infini_train_cuda_kernels
     PUBLIC
@@ -131,6 +136,22 @@ if(USE_CUDA)
     find_package(NCCL REQUIRED)
     add_compile_definitions(USE_NCCL=1)
     target_link_libraries(infini_train_cuda_kernels PUBLIC nccl)
+  endif()
+
+  if(USE_CUDNN)
+    find_path(CUDNN_INCLUDE_DIR cudnn.h
+      HINTS ${CUDNN_ROOT} $ENV{CUDNN_ROOT} ${CUDAToolkit_INCLUDE_DIRS} /usr/include /usr/local/cuda/include
+      PATH_SUFFIXES include)
+    find_library(CUDNN_LIBRARY cudnn
+      HINTS ${CUDNN_ROOT} $ENV{CUDNN_ROOT} ${CUDAToolkit_LIBRARY_DIR} /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/cuda/lib64
+      PATH_SUFFIXES lib lib64)
+    if(NOT CUDNN_INCLUDE_DIR OR NOT CUDNN_LIBRARY)
+      message(FATAL_ERROR "USE_CUDNN=ON but cuDNN not found. Set -DCUDNN_ROOT=<path>.")
+    endif()
+    message(STATUS "Add USE_CUDNN: include=${CUDNN_INCLUDE_DIR}, lib=${CUDNN_LIBRARY}")
+    add_compile_definitions(USE_CUDNN=1)
+    target_include_directories(infini_train_cuda_kernels PUBLIC ${CUDNN_INCLUDE_DIR})
+    target_link_libraries(infini_train_cuda_kernels PUBLIC ${CUDNN_LIBRARY})
   endif()
 endif()
 
@@ -239,6 +260,14 @@ add_executable(mnist
   example/mnist/net.cc
 )
 link_infini_train_exe(mnist)
+
+add_executable(cifar10
+  example/cifar10/main.cc
+  example/cifar10/dataset.cc
+  example/cifar10/models.cc
+  example/cifar10/checkpoint_io.cc
+)
+link_infini_train_exe(cifar10)
 
 add_executable(gpt2
   example/gpt2/main.cc

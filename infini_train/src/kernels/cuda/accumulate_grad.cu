@@ -46,6 +46,62 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate,
 }
 
 template <typename T>
+__global__ void SGDAccumulateGradKernel(const T *grad_data, T *param_data,
+                                        T *buf_data, size_t num_elements,
+                                        float learning_rate, float momentum,
+                                        float weight_decay,
+                                        bool is_first_step) {
+  size_t idx = static_cast<size_t>(blockIdx.x) * blockDim.x + threadIdx.x;
+  if (idx < num_elements) {
+    float p = common::cuda::Cast<float>(param_data[idx]);
+    float d_p = common::cuda::Cast<float>(grad_data[idx]);
+    if (weight_decay != 0.0f) {
+      d_p += weight_decay * p;
+    }
+    if (momentum != 0.0f && buf_data != nullptr) {
+      float b =
+          is_first_step
+              ? d_p
+              : (momentum * common::cuda::Cast<float>(buf_data[idx]) + d_p);
+      buf_data[idx] = common::cuda::Cast<T>(b);
+      d_p = b;
+    }
+    param_data[idx] = common::cuda::Cast<T>(p - learning_rate * d_p);
+  }
+}
+
+void SGDAccumulateGrad(const std::shared_ptr<Tensor> &grad,
+                       const std::shared_ptr<Tensor> &param,
+                       const std::shared_ptr<Tensor> &momentum_buffer,
+                       float learning_rate, float momentum, float weight_decay,
+                       bool is_first_step) {
+  size_t num_elements = grad->NumElements();
+  int threads_per_block = 256;
+  int num_blocks = (num_elements + threads_per_block - 1) / threads_per_block;
+
+  auto device = grad->GetDevice();
+  const auto &cuda_stream =
+      dynamic_cast<infini_train::core::cuda::CudaStream *>(
+          infini_train::core::GetDeviceGuardImpl(device.type())
+              ->GetStream(device))
+          ->cuda_stream();
+
+  core::cuda::DispatchCudaFunc<INFINI_ALL_FLOATING_TYPES>(
+      grad->Dtype(),
+      [=]<typename T>() {
+        T *buf_ptr = momentum_buffer
+                         ? static_cast<T *>(momentum_buffer->DataPtr())
+                         : nullptr;
+        SGDAccumulateGradKernel<<<num_blocks, threads_per_block, 0,
+                                  cuda_stream>>>(
+            static_cast<const T *>(grad->DataPtr()),
+            static_cast<T *>(param->DataPtr()), buf_ptr, num_elements,
+            learning_rate, momentum, weight_decay, is_first_step);
+      },
+      "CUDA SGDAccumulateGrad");
+}
+
+template <typename T>
 __global__ void AdamAccumulateGradKernel(const T *grad_data, T *param_data,
                                          size_t num_elements, T *m_data,
                                          T *v_data, float learning_rate,
@@ -113,6 +169,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad,
                   infini_train::kernels::cuda::kernel_name)
 
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
+REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(SGDAccumulateGrad)
 REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CUDA_ACCUMULATE_GRAD_KERNEL

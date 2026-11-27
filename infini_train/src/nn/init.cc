@@ -154,6 +154,22 @@ std::shared_ptr<Tensor> KaimingUniform(const std::shared_ptr<Tensor> &tensor,
   return tensor->Uniform(-bound, bound, generator);
 }
 
+std::shared_ptr<Tensor> KaimingNormal(const std::shared_ptr<Tensor> &tensor,
+                                      float a, KaimingMode mode,
+                                      NonLinearityType nonlinearity,
+                                      std::optional<std::mt19937> generator) {
+  for (const auto dim : tensor->Dims()) {
+    if (dim == 0) {
+      LOG(WARNING) << "Initializing zero-element tensors is a no-op";
+      return tensor;
+    }
+  }
+  const auto fan = CalculateCorrectFan(tensor, mode);
+  const auto gain = CalculateGain(nonlinearity, a);
+  const float std = gain / sqrt(fan);
+  return Normal(tensor, 0.0f, std, generator);
+}
+
 std::shared_ptr<Tensor> Uniform(const std::shared_ptr<Tensor> &tensor, float a,
                                 float b,
                                 std::optional<std::mt19937> generator) {

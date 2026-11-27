@@ -17,6 +17,35 @@ void AccumulateGrad(const std::shared_ptr<Tensor> &gradient, float rate,
   }
 }
 
+void SGDAccumulateGrad(const std::shared_ptr<Tensor> &grad,
+                       const std::shared_ptr<Tensor> &param,
+                       const std::shared_ptr<Tensor> &momentum_buffer,
+                       float learning_rate, float momentum, float weight_decay,
+                       bool is_first_step) {
+  const float *grad_data = static_cast<const float *>(grad->DataPtr());
+  float *param_data = static_cast<float *>(param->DataPtr());
+  float *buf_data = momentum_buffer
+                        ? static_cast<float *>(momentum_buffer->DataPtr())
+                        : nullptr;
+
+#pragma omp parallel for
+  for (size_t idx = 0; idx < grad->NumElements(); ++idx) {
+    float d_p = grad_data[idx];
+    if (weight_decay != 0.0f) {
+      d_p += weight_decay * param_data[idx];
+    }
+    if (momentum != 0.0f && buf_data != nullptr) {
+      if (is_first_step) {
+        buf_data[idx] = d_p;
+      } else {
+        buf_data[idx] = momentum * buf_data[idx] + d_p;
+      }
+      d_p = buf_data[idx];
+    }
+    param_data[idx] -= learning_rate * d_p;
+  }
+}
+
 void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad,
                         const std::shared_ptr<Tensor> &param,
                         const std::shared_ptr<Tensor> &m,
@@ -50,6 +79,7 @@ void AdamAccumulateGrad(const std::shared_ptr<Tensor> &grad,
                   infini_train::kernels::cpu::kernel_name)
 
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AccumulateGrad)
+REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(SGDAccumulateGrad)
 REGISTER_CPU_ACCUMULATE_GRAD_KERNEL(AdamAccumulateGrad)
 
 #undef REGISTER_CPU_ACCUMULATE_GRAD_KERNEL
