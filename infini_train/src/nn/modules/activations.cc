@@ -27,4 +27,14 @@ std::vector<std::shared_ptr<Tensor>> SwiGLU::Forward(
     const std::vector<std::shared_ptr<Tensor>> &x) {
   return std::make_shared<autograd::SwiGLU>()->Apply(x);
 }
+
+std::vector<std::shared_ptr<Tensor>> ReLU::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  return std::make_shared<autograd::ReLU>()->Apply(input_tensors);
+}
+
+std::vector<std::shared_ptr<Tensor>> ReLU6::Forward(
+    const std::vector<std::shared_ptr<Tensor>> &input_tensors) {
+  return std::make_shared<autograd::ReLU6>()->Apply(input_tensors);
+}
 }  // namespace infini_train::nn

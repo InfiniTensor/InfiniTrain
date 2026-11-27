@@ -85,6 +85,13 @@ class Module : public std::enable_shared_from_this<Module> {
   const std::shared_ptr<Tensor> &parameter(const std::string &name) const;
 
   virtual std::vector<std::shared_ptr<Tensor>> Buffers() const;
+  bool has_buffer(const std::string &name) const;
+  std::shared_ptr<Tensor> *mutable_buffer(const std::string &name);
+  const std::shared_ptr<Tensor> &buffer(const std::string &name) const;
+
+  virtual void Train(bool mode = true);
+  void Eval();
+  bool is_training() const;
 
   std::vector<std::shared_ptr<Module>> modules();
   std::shared_ptr<Module> &mutable_module(const std::string &name);
@@ -147,6 +154,7 @@ class Module : public std::enable_shared_from_this<Module> {
 
  protected:
   Device device_;
+  bool training_ = true;
   const std::string type_ = kUndefinedType;
   std::unordered_map<std::string, std::shared_ptr<Module>> modules_;
   std::unordered_map<std::string, std::shared_ptr<Tensor>> parameters_;

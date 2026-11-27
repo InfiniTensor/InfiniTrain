@@ -79,35 +79,124 @@ void Optimizer::set_initial_learning_rate(float lr) {
 namespace optimizers {
 
 SGD::SGD(const std::vector<std::shared_ptr<Tensor>> &params,
-         float learning_rate)
-    : Optimizer(params, learning_rate) {}
+         float learning_rate, float momentum, float weight_decay)
+    : Optimizer(params, learning_rate),
+      momentum_(momentum),
+      weight_decay_(weight_decay) {
+  InitMomentumBuffers();
+}
 
-SGD::SGD(const NamedParameterList &named_params, float learning_rate)
-    : Optimizer(named_params, learning_rate) {}
+SGD::SGD(const NamedParameterList &named_params, float learning_rate,
+         float momentum, float weight_decay)
+    : Optimizer(named_params, learning_rate),
+      momentum_(momentum),
+      weight_decay_(weight_decay) {
+  InitMomentumBuffers();
+}
+
+void SGD::InitMomentumBuffers() {
+  if (momentum_ == 0.0f) {
+    return;
+  }
+  momentum_buffers_.reserve(params_.size());
+  for (const auto &param : params_) {
+    auto buf = std::make_shared<Tensor>(param->Dims(), param->Dtype(),
+                                        param->GetDevice());
+    buf->Fill(0.0f);
+    momentum_buffers_.push_back(std::move(buf));
+  }
+}
 
 void SGD::Step() {
-  for (auto param : params_) {
-    if (!param->grad()) {
+  const bool is_first_step = (step_ == 0);
+  ++step_;
+
+  if (momentum_ == 0.0f && weight_decay_ == 0.0f) {
+    for (auto &param : params_) {
+      if (!param->grad()) {
+        LOG(INFO) << "Skipping param with null grad.";
+        continue;
+      }
+      auto device = param->GetDevice();
+      core::DeviceGuard guard(device);
+      auto kernel =
+          Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
+      kernel.Call<void>(param->grad(), -learning_rate_, param);
+    }
+    return;
+  }
+
+  for (size_t i = 0; i < params_.size(); ++i) {
+    auto &param = params_[i];
+    const auto &grad = param->grad();
+    if (!grad) {
       LOG(INFO) << "Skipping param with null grad.";
       continue;
     }
     auto device = param->GetDevice();
     core::DeviceGuard guard(device);
+    std::shared_ptr<Tensor> buf =
+        momentum_ != 0.0f ? momentum_buffers_[i] : nullptr;
     auto kernel =
-        Dispatcher::Instance().GetKernel({device.type(), "AccumulateGrad"});
-    kernel.Call<void>(param->grad(), -learning_rate_, param);
+        Dispatcher::Instance().GetKernel({device.type(), "SGDAccumulateGrad"});
+    kernel.Call<void>(grad, param, buf, learning_rate_, momentum_,
+                      weight_decay_, is_first_step);
   }
 }
 
-OptimizerCreator SGD::Create(float learning_rate) {
-  return [learning_rate](const std::vector<std::shared_ptr<Tensor>> &params) {
-    return std::make_shared<SGD>(params, learning_rate);
+std::unordered_map<std::string, std::shared_ptr<Tensor>> SGD::StateDict()
+    const {
+  std::unordered_map<std::string, std::shared_ptr<Tensor>> state;
+  if (momentum_ == 0.0f) {
+    return state;
+  }
+  for (size_t i = 0; i < momentum_buffers_.size(); ++i) {
+    const auto suffix =
+        parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
+    state.emplace(std::string(kSGDMomentumBufferPrefix) + suffix,
+                  momentum_buffers_[i]);
+  }
+  auto step_tensor = std::make_shared<Tensor>(std::vector<int64_t>{},
+                                              DataType::kINT64, Device());
+  *static_cast<int64_t *>(step_tensor->DataPtr()) = step_;
+  state.emplace(std::string(kSGDStepKey), step_tensor);
+  return state;
+}
+
+void SGD::LoadStateDict(
+    const std::unordered_map<std::string, std::shared_ptr<Tensor>>
+        &state_dict) {
+  if (momentum_ != 0.0f) {
+    for (size_t i = 0; i < momentum_buffers_.size(); ++i) {
+      const auto suffix =
+          parameter_names_.empty() ? std::to_string(i) : parameter_names_[i];
+      const auto buf_key = std::string(kSGDMomentumBufferPrefix) + suffix;
+      CHECK(state_dict.contains(buf_key))
+          << "Missing optimizer state: " << buf_key;
+      momentum_buffers_[i]->CopyFrom(state_dict.at(buf_key));
+    }
+  }
+  const std::string step_key(kSGDStepKey);
+  if (state_dict.contains(step_key)) {
+    const Tensor step_cpu = state_dict.at(step_key)->To(Device());
+    step_ = *static_cast<const int64_t *>(step_cpu.DataPtr());
+  }
+}
+
+OptimizerCreator SGD::Create(float learning_rate, float momentum,
+                             float weight_decay) {
+  return [learning_rate, momentum,
+          weight_decay](const std::vector<std::shared_ptr<Tensor>> &params) {
+    return std::make_shared<SGD>(params, learning_rate, momentum, weight_decay);
   };
 }
 
-OptimizerCreatorNamed SGD::CreateNamed(float learning_rate) {
-  return [learning_rate](const NamedParameterList &named_params) {
-    return std::make_shared<SGD>(named_params, learning_rate);
+OptimizerCreatorNamed SGD::CreateNamed(float learning_rate, float momentum,
+                                       float weight_decay) {
+  return [learning_rate, momentum,
+          weight_decay](const NamedParameterList &named_params) {
+    return std::make_shared<SGD>(named_params, learning_rate, momentum,
+                                 weight_decay);
   };
 }
 
