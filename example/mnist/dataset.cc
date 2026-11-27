@@ -99,7 +99,9 @@ MNISTDataset::MNISTDataset(const std::string &dataset, bool train)
                       train ? kTrainPrefix : kTestPrefix))),
       image_dims_(image_file_.dims.begin() + 1, image_file_.dims.end()),
       label_dims_(label_file_.dims.begin() + 1, label_file_.dims.end()),
-      image_size_in_bytes_(kSN3TypeToSize.at(image_file_.type) *
+      // The constructor body converts images from uint8 to float32, so the
+      // per-sample byte stride must use the float32 element size.
+      image_size_in_bytes_(sizeof(float) *
                            std::accumulate(image_dims_.begin(),
                                            image_dims_.end(), 1,
                                            std::multiplies<int>())),
