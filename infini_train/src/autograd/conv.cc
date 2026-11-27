@@ -1,6 +1,7 @@
 #include "infini_train/include/autograd/conv.h"
 
 #include <memory>
+#include <ostream>
 #include <utility>
 #include <vector>
 

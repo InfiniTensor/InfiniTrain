@@ -5,7 +5,6 @@
 #include <vector>
 
 #include "infini_train/include/autograd/pooling.h"
-#include "infini_train/include/tensor.h"
 
 namespace infini_train::nn {
 

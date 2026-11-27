@@ -61,7 +61,7 @@ def load_tensor_map(path: str) -> Dict[str, np.ndarray]:
         for _ in range(count):
             (name_len,) = struct.unpack("<I", f.read(4))
             name = f.read(name_len).decode("utf-8")
-            (dtype_code, ndim) = struct.unpack("<iI", f.read(8))
+            dtype_code, ndim = struct.unpack("<iI", f.read(8))
             dims = struct.unpack(f"<{ndim}q", f.read(8 * ndim)) if ndim > 0 else ()
             (nbytes,) = struct.unpack("<Q", f.read(8))
             raw = f.read(nbytes)
